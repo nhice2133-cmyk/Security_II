@@ -56,7 +56,7 @@ $countries = [
     /* Security Questions specific styles */
     .question-block { margin-bottom: 1.5rem; }
     select.cyber-input { background: rgba(0, 0, 0, 0.7); }
-    select.cyber-input option { background: #1a1a1a; color: #00ffff; }
+    select.cyber-input option { background: white !important; color: black !important; }
   </style>
 </head>
 <body>

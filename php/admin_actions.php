@@ -131,7 +131,7 @@ if ($action === 'get_users') {
     if ($limit < 1) $limit = 10;
     $offset = ($page - 1) * $limit;
     
-    $query = "SELECT id, id_number, username, first_name, last_name, role, status, privileges FROM users WHERE id != ?";
+    $query = "SELECT id, id_number, username, first_name, last_name, role, status, privileges FROM users WHERE id != ? AND role != 'super_admin'";
     $params = [$userId];
     
     if ($filterEmpId) {

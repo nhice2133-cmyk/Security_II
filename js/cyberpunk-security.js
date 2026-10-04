@@ -191,10 +191,17 @@ class CyberpunkSecurity {
         const formData = new FormData(this.form);
         const data = Object.fromEntries(formData);
         
+        const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+        const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+        if (csrfToken) {
+            data.csrf_token = csrfToken;
+        }
+
         fetch('../php/register_final.php', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken
             },
             body: JSON.stringify(data)
         })

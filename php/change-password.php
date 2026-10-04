@@ -16,8 +16,8 @@ requireCsrf();
 // Update session activity
 $_SESSION['last_activity'] = time();
 
-// Check privileges if admin
-if ($_SESSION['role'] === 'admin') {
+// Check privileges if admin or user
+if ($_SESSION['role'] !== 'super_admin') {
     $db = new Database();
     $stmtPriv = $db->prepare("SELECT privileges FROM users WHERE id = ?");
     $stmtPriv->execute([$_SESSION['user_id']]);

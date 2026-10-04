@@ -4,6 +4,8 @@ require_once 'config.php';
 header('Content-Type: application/json');
 
 // Expect JSON
+requireCsrf();
+
 $payload = json_decode(file_get_contents('php://input'), true);
 if (!$payload) {
     echo json_encode(['success' => false, 'message' => 'Invalid payload']);

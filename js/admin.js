@@ -19,11 +19,31 @@ window.customPrompt = function(msg) {
 };
 // --- Custom Modals ---
 let alertResolve = null;
+let alertEnterHandler = null;
+
 window.customAlert = function(msg) {
     return new Promise(resolve => {
         document.getElementById('customAlertMessage').innerText = msg;
-        document.getElementById('customAlertModal').style.display = 'flex';
-        alertResolve = resolve;
+        const modal = document.getElementById('customAlertModal');
+        modal.style.display = 'flex';
+        
+        const okBtn = modal.querySelector('button');
+        if (okBtn) setTimeout(() => okBtn.focus(), 10);
+
+        if (alertEnterHandler) document.removeEventListener('keydown', alertEnterHandler);
+        alertEnterHandler = function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                closeCustomAlert();
+            }
+        };
+        document.addEventListener('keydown', alertEnterHandler);
+
+        alertResolve = () => {
+            if (alertEnterHandler) document.removeEventListener('keydown', alertEnterHandler);
+            alertEnterHandler = null;
+            resolve();
+        };
     });
 };
 window.closeCustomAlert = function() {
@@ -32,11 +52,31 @@ window.closeCustomAlert = function() {
 };
 
 let confirmResolve = null;
+let confirmEnterHandler = null;
+
 window.customConfirm = function(msg) {
     return new Promise(resolve => {
         document.getElementById('customConfirmMessage').innerText = msg;
-        document.getElementById('customConfirmModal').style.display = 'flex';
-        confirmResolve = resolve;
+        const modal = document.getElementById('customConfirmModal');
+        modal.style.display = 'flex';
+        
+        const btns = modal.querySelectorAll('button');
+        if (btns.length > 1) setTimeout(() => btns[1].focus(), 10);
+
+        if (confirmEnterHandler) document.removeEventListener('keydown', confirmEnterHandler);
+        confirmEnterHandler = function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                window.resolveCustomConfirm(true);
+            }
+        };
+        document.addEventListener('keydown', confirmEnterHandler);
+
+        confirmResolve = (result) => {
+            if (confirmEnterHandler) document.removeEventListener('keydown', confirmEnterHandler);
+            confirmEnterHandler = null;
+            resolve(result);
+        };
     });
 };
 window.resolveCustomConfirm = function(result) {
@@ -48,8 +88,12 @@ let usersPage = 1;
 let logsPage = 1;
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Show default tab
-    if (userRole === 'super_admin' || userRole === 'admin') {
+    // Show default tab or saved tab
+    const savedTab = sessionStorage.getItem('activeDashboardTab');
+    
+    if (savedTab && document.getElementById(savedTab)) {
+        showTab(savedTab);
+    } else if (userRole === 'super_admin' || userRole === 'admin') {
         showTab('users');
     } else {
         showTab('profile');
@@ -156,7 +200,11 @@ async function submitSaPasswordModal() {
     }
 }
 
-async function loadUsers(page = 1) {
+async function loadUsers(page = null) {
+    if (page === null) {
+        page = parseInt(sessionStorage.getItem('dashboardUsersPage')) || 1;
+    }
+    sessionStorage.setItem('dashboardUsersPage', page);
     usersPage = page;
     const empId = document.getElementById('filterEmpId').value;
     
@@ -433,7 +481,11 @@ async function deleteUser(id, isRequest) {
     }
 }
 
-async function loadLogs(page = 1) {
+async function loadLogs(page = null) {
+    if (page === null) {
+        page = parseInt(sessionStorage.getItem('dashboardLogsPage')) || 1;
+    }
+    sessionStorage.setItem('dashboardLogsPage', page);
     logsPage = page;
     const month = document.getElementById('filterMonth').value;
     const date = document.getElementById('filterDate').value;
@@ -490,7 +542,17 @@ async function loadDeleteRequests() {
 
             tr.appendChild(mkTd((r.target_username || '') + ' (' + (r.target_id_number || '') + ')'));
             tr.appendChild(mkTd(r.admin_username));
-            tr.appendChild(mkTd(r.reason));
+            
+            const reasonTd = document.createElement('td');
+            const viewBtn = document.createElement('button');
+            viewBtn.className = 'btn-small';
+            viewBtn.textContent = 'View';
+            viewBtn.addEventListener('click', () => {
+                customAlert(r.reason || 'No reason provided.');
+            });
+            reasonTd.appendChild(viewBtn);
+            tr.appendChild(reasonTd);
+            
             tr.appendChild(mkTd(r.status));
 
             const actionsTd = document.createElement('td');
@@ -766,6 +828,13 @@ async function openManagePrivilegesModal(userId, username, role) {
     document.querySelectorAll('.modal-priv-cb').forEach(cb => cb.checked = false);
     updateModalPrivCount();
 
+    // Hide Module 2 and 3 if role is 'user'
+    const isUser = role.toLowerCase() === 'user';
+    const mCard2 = document.getElementById('modalMgmtCard2');
+    const mCard3 = document.getElementById('modalMgmtCard3');
+    if (mCard2) mCard2.style.display = isUser ? 'none' : 'block';
+    if (mCard3) mCard3.style.display = isUser ? 'none' : 'block';
+
     // Fetch user privileges from backend
     try {
         const res = await apiCall('get_user_privileges', { target_id: userId });
@@ -1005,6 +1074,13 @@ async function onPrivMgmtUserChange(userId) {
 
     // Reset tab checkboxes
     document.querySelectorAll('.priv-mgmt-tab-cb').forEach(cb => cb.checked = false);
+
+    // Hide Module 2 and 3 if role is 'user'
+    const isUser = user.role.toLowerCase() === 'user';
+    const pCard2 = document.getElementById('privMgmtCard2');
+    const pCard3 = document.getElementById('privMgmtCard3');
+    if (pCard2) pCard2.style.display = isUser ? 'none' : 'block';
+    if (pCard3) pCard3.style.display = isUser ? 'none' : 'block';
 
     // Fetch user's current privileges
     try {

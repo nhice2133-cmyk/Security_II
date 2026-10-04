@@ -698,14 +698,18 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         const csrfMeta = document.querySelector('meta[name="csrf-token"]');
-        if (csrfMeta) {
-            payload.csrf_token = csrfMeta.getAttribute('content');
+        const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+        if (csrfToken) {
+            payload.csrf_token = csrfToken; // Keep it in body for fallback
         }
 
         try {
             const response = await fetch('../php/update-profile.php', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': csrfToken
+                },
                 body: JSON.stringify(payload),
             });
 

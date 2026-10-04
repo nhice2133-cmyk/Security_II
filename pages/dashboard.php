@@ -176,16 +176,21 @@ if (!is_array($privs)) $privs = [];
       </div>
 
       <div id="profile" class="tab-content active">
-        <div class="panel">
+        <div class="panel" style="max-width: 600px;">
           <div class="panel-hd"><div class="panel-title">Overview</div></div>
           <div class="panel-bd">
             <p><strong>Username:</strong> <?= htmlspecialchars($user['username']) ?></p>
             <p><strong>Email:</strong> <?= htmlspecialchars($user['email']) ?></p>
             <p><strong>ID Number:</strong> <?= htmlspecialchars($user['id_number']) ?></p>
             <br>
-            <?php if ($role !== 'admin' || in_array('change_password', $privs)): ?>
-            <a class="cyber-btn" href="change-password.php" style="width: auto;">Change Password</a>
-            <?php endif; ?>
+            <div style="display: flex; gap: 1rem;">
+                <?php if ($role === 'super_admin' || in_array('change_password', $privs)): ?>
+                <a class="cyber-btn" href="change-password.php" style="width: auto;">Change Password</a>
+                <?php endif; ?>
+                <?php if ($role === 'super_admin' || in_array('profile_management', $privs)): ?>
+                <a class="cyber-btn secondary" href="edit-profile.php" style="width: auto;">Edit Profile</a>
+                <?php endif; ?>
+            </div>
           </div>
         </div>
       </div>
@@ -373,7 +378,7 @@ if (!is_array($privs)) $privs = [];
                 </div>
 
                 <!-- Module 2: USER & STUDENT MANAGEMENT -->
-                <div class="module-card">
+                <div class="module-card" id="privMgmtCard2">
                   <div class="module-card-title"><span>👥</span> USER & STUDENT MANAGEMENT</div>
                   <label class="privilege-item">
                     <input type="checkbox" class="privilege-checkbox priv-mgmt-tab-cb" value="view_accounts" onchange="updatePrivMgmtTabCount()">
@@ -390,7 +395,7 @@ if (!is_array($privs)) $privs = [];
                 </div>
 
                 <!-- Module 3: APPROVALS & REQUESTS -->
-                <div class="module-card">
+                <div class="module-card" id="privMgmtCard3">
                   <div class="module-card-title"><span>✍️</span> APPROVALS & REQUESTS</div>
                   <label class="privilege-item">
                     <input type="checkbox" class="privilege-checkbox priv-mgmt-tab-cb" value="registration_approval" onchange="updatePrivMgmtTabCount()">
@@ -718,12 +723,12 @@ if (!is_array($privs)) $privs = [];
 
   
   <!-- Custom Alert Modal -->
-  <div id="customAlertModal" style="display:none; position:fixed; inset:0; background:rgba(15, 23, 42, 0.85); z-index:10000; align-items:center; justify-content:center; backdrop-filter: blur(5px);">
+  <div id="customAlertModal" style="display:none; position:fixed; inset:0; background:rgba(15, 23, 42, 0.85); z-index:999999; align-items:center; justify-content:center; backdrop-filter: blur(5px);">
     <div style="background:var(--cyber-surface); border:1px solid var(--cyber-border); border-radius:12px; width:90%; max-width:400px; padding:1.5rem; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
       <div style="font-family:'Inter', sans-serif; font-size:1.1rem; color:var(--cyber-primary); font-weight:700; margin-bottom:1rem; text-shadow:0 0 10px rgba(14,165,233,0.3);">
         SYSTEM NOTIFICATION
       </div>
-      <p id="customAlertMessage" style="color:var(--cyber-text); font-size:0.95rem; line-height:1.5; margin-bottom:1.5rem;"></p>
+      <p id="customAlertMessage" style="color:var(--cyber-text); font-size:0.95rem; line-height:1.5; margin-bottom:1.5rem; word-wrap: break-word; overflow-wrap: anywhere;"></p>
       <div style="display:flex; justify-content:flex-end;">
         <button class="cyber-btn" onclick="closeCustomAlert()" style="width:auto; padding:0.5rem 1.5rem;">OK</button>
       </div>
@@ -731,12 +736,12 @@ if (!is_array($privs)) $privs = [];
   </div>
 
   <!-- Custom Confirm Modal -->
-  <div id="customConfirmModal" style="display:none; position:fixed; inset:0; background:rgba(15, 23, 42, 0.85); z-index:10000; align-items:center; justify-content:center; backdrop-filter: blur(5px);">
+  <div id="customConfirmModal" style="display:none; position:fixed; inset:0; background:rgba(15, 23, 42, 0.85); z-index:999999; align-items:center; justify-content:center; backdrop-filter: blur(5px);">
     <div style="background:var(--cyber-surface); border:1px solid var(--cyber-border); border-radius:12px; width:90%; max-width:400px; padding:1.5rem; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
       <div style="font-family:'Inter', sans-serif; font-size:1.1rem; color:var(--cyber-warning); font-weight:700; margin-bottom:1rem; text-shadow:0 0 10px rgba(245,158,11,0.3);">
         ACTION REQUIRED
       </div>
-      <p id="customConfirmMessage" style="color:var(--cyber-text); font-size:0.95rem; line-height:1.5; margin-bottom:1.5rem;"></p>
+      <p id="customConfirmMessage" style="color:var(--cyber-text); font-size:0.95rem; line-height:1.5; margin-bottom:1.5rem; word-wrap: break-word; overflow-wrap: anywhere;"></p>
       <div style="display:flex; justify-content:flex-end; gap:1rem;">
         <button class="cyber-btn" onclick="resolveCustomConfirm(false)" style="background:transparent; border:1px solid var(--cyber-text-dim); color:var(--cyber-text-dim); width:auto; padding:0.5rem 1.5rem; box-shadow:none;">Cancel</button>
         <button class="cyber-btn" onclick="resolveCustomConfirm(true)" style="width:auto; padding:0.5rem 1.5rem;">Confirm</button>
@@ -822,7 +827,7 @@ if (!is_array($privs)) $privs = [];
           </div>
 
           <!-- Module 2: USER & STUDENT MANAGEMENT -->
-          <div class="module-card">
+          <div class="module-card" id="modalMgmtCard2">
             <div class="module-card-title"><span>👥</span> USER & STUDENT MANAGEMENT</div>
             <label class="privilege-item">
               <input type="checkbox" class="privilege-checkbox modal-priv-cb" value="view_accounts" onchange="updateModalPrivCount()">
@@ -839,7 +844,7 @@ if (!is_array($privs)) $privs = [];
           </div>
 
           <!-- Module 3: APPROVALS & REQUESTS -->
-          <div class="module-card">
+          <div class="module-card" id="modalMgmtCard3">
             <div class="module-card-title"><span>✍️</span> APPROVALS & REQUESTS</div>
             <label class="privilege-item">
               <input type="checkbox" class="privilege-checkbox modal-priv-cb" value="registration_approval" onchange="updateModalPrivCount()">
@@ -866,6 +871,7 @@ if (!is_array($privs)) $privs = [];
     const userPrivileges = <?= json_encode($privs) ?>;
 
     function showTab(tabId) {
+      sessionStorage.setItem('activeDashboardTab', tabId);
       document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
       

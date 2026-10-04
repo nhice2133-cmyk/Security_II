@@ -1,0 +1,679 @@
+/* Cyberpunk Super Admin Portal Styles */
+.portal-container {
+    width: 100%;
+    margin-bottom: 2rem;
+    animation: portalFadeIn 0.3s ease-out;
+}
+
+@keyframes portalFadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Top bar with Back to Directory */
+.portal-topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.2rem;
+    padding: 0.5rem 0;
+}
+
+.portal-brand-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.4rem 0.9rem;
+    background: rgba(0, 255, 255, 0.08);
+    border: 1px solid var(--cyber-border);
+    border-radius: 999px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.8rem;
+    color: var(--cyber-primary);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.portal-back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid var(--cyber-border);
+    color: var(--cyber-text);
+    padding: 0.5rem 1.1rem;
+    border-radius: 20px;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.25s ease;
+}
+
+.portal-back-btn:hover {
+    border-color: var(--cyber-primary);
+    color: var(--cyber-primary);
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    transform: translateX(-3px);
+}
+
+/* Main Two-Column Card */
+.portal-card {
+    display: flex;
+    /* removed gradient background */
+    border: 1px solid rgba(0, 255, 255, 0.25);
+    border-radius: 14px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    overflow: hidden;
+    position: relative;
+}
+
+.portal-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    /* removed gradient background */
+}
+
+/* Left Sidebar (Account Role & Notice) */
+.portal-sidebar {
+    width: 320px;
+    min-width: 320px;
+    /* removed gradient background */
+    border-right: 1px solid rgba(0, 255, 255, 0.15);
+    padding: 2rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 1.5rem;
+}
+
+.portal-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: rgba(14, 165, 233, 0.15);
+    border: 1px solid var(--cyber-primary);
+    color: var(--cyber-primary);
+    padding: 0.25rem 0.6rem;
+    border-radius: 4px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    box-shadow: 0 0 10px rgba(14, 165, 233, 0.2);
+    text-shadow: 0 0 5px rgba(14, 165, 233, 0.5);
+}
+
+.portal-sidebar-title {
+    font-family: 'Inter', sans-serif;
+    font-size: 1.5rem;
+    font-weight: 900;
+    color: #ffffff;
+    letter-spacing: 1px;
+    margin-bottom: 0.4rem;
+}
+
+.portal-sidebar-desc {
+    color: var(--cyber-text-dim);
+    font-size: 0.85rem;
+    line-height: 1.4;
+    margin-bottom: 1.5rem;
+}
+
+.step-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.9rem;
+}
+
+.step-label {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--cyber-text);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.step-required-badge {
+    background: rgba(168, 85, 247, 0.15);
+    border: 1px solid var(--cyber-secondary);
+    color: var(--cyber-secondary);
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    letter-spacing: 0.5px;
+    box-shadow: 0 0 10px rgba(168, 85, 247, 0.2);
+    text-shadow: 0 0 5px rgba(168, 85, 247, 0.5);
+}
+
+/* Role Selector Cards */
+.role-cards-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+}
+
+.role-card {
+    background: rgba(0, 0, 0, 0.45);
+    border: 1.5px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    padding: 1rem;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    position: relative;
+    user-select: none;
+}
+
+.role-card:hover {
+    border-color: rgba(0, 255, 255, 0.5);
+    background: rgba(0, 255, 255, 0.04);
+}
+
+.role-card.active {
+    border-color: var(--cyber-primary);
+    background: rgba(14, 165, 233, 0.05);
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+}
+
+.role-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.4rem;
+}
+
+.role-title-group {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.role-icon {
+    font-size: 1.1rem;
+}
+
+.role-title {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: #ffffff;
+}
+
+.role-card.active .role-title {
+    color: var(--cyber-primary);
+}
+
+.radio-circle {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.role-card.active .radio-circle {
+    border-color: var(--cyber-primary);
+    background: var(--cyber-primary);
+    box-shadow: 0 0 10px rgba(14, 165, 233, 0.5);
+}
+
+.role-card.active .radio-circle::after {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #000;
+}
+
+.role-description {
+    color: var(--cyber-text-dim);
+    font-size: 0.78rem;
+    line-height: 1.35;
+    margin-left: 1.7rem;
+}
+
+/* First Login Notice */
+.first-login-notice {
+    margin-top: auto;
+    background: rgba(255, 170, 0, 0.07);
+    border: 1px solid rgba(255, 170, 0, 0.3);
+    border-radius: 8px;
+    padding: 0.85rem;
+    display: flex;
+    gap: 0.7rem;
+    align-items: flex-start;
+}
+
+.notice-icon {
+    font-size: 1.2rem;
+    color: var(--cyber-warning);
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+}
+
+.notice-text {
+    font-size: 0.78rem;
+    line-height: 1.35;
+    color: #e0d0b0;
+}
+
+.notice-text strong {
+    color: var(--cyber-warning);
+}
+
+/* Right Main Area */
+.portal-main {
+    flex: 1;
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    background: rgba(14, 18, 22, 0.75);
+}
+
+/* Section 2: Initial Credentials */
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding-bottom: 0.6rem;
+    margin-bottom: 1rem;
+}
+
+.section-title {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: var(--cyber-text);
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.section-tag {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--cyber-primary);
+    background: rgba(0, 255, 255, 0.08);
+    border: 1px solid rgba(0, 255, 255, 0.25);
+    padding: 0.2rem 0.6rem;
+    border-radius: 12px;
+}
+
+.credentials-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1.2rem;
+}
+
+.credential-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.field-label-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 0.82rem;
+}
+
+.field-label {
+    font-weight: 700;
+    color: var(--cyber-text);
+}
+
+.field-req {
+    color: var(--cyber-primary);
+}
+
+.field-hint {
+    color: var(--cyber-text-dim);
+    font-size: 0.72rem;
+}
+
+.input-icon-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.field-icon {
+    position: absolute;
+    left: 0.8rem;
+    color: var(--cyber-text-dim);
+    font-size: 0.9rem;
+    pointer-events: none;
+}
+
+.input-icon-wrap input {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--cyber-border);
+    border-radius: 6px;
+    padding: 0.65rem 2.4rem 0.65rem 2.2rem;
+    color: var(--cyber-text);
+    font-family: 'Inter', sans-serif;
+    font-size: 0.95rem;
+    transition: border-color 0.2s;
+}
+
+.input-icon-wrap input:focus {
+    outline: none;
+    border-color: var(--cyber-primary);
+    background: rgba(0, 0, 0, 0.8);
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+}
+
+.pwd-toggle-btn {
+    position: absolute;
+    right: 0.6rem;
+    background: none;
+    border: none;
+    color: var(--cyber-text-dim);
+    cursor: pointer;
+    padding: 0.2rem 0.4rem;
+    font-size: 0.9rem;
+    transition: color 0.2s;
+}
+
+.pwd-toggle-btn:hover {
+    color: var(--cyber-primary);
+}
+
+/* Section 3: Privilege Management */
+.privilege-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.badge-selected-count {
+    background: rgba(14, 165, 233, 0.15);
+    border: 1px solid var(--cyber-primary);
+    color: var(--cyber-primary);
+    padding: 0.2rem 0.6rem;
+    border-radius: 12px;
+}
+
+.priv-pill-btn {
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: var(--cyber-text-dim);
+    padding: 0.3rem 0.75rem;
+    border-radius: 14px;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.priv-pill-btn:hover {
+    border-color: var(--cyber-primary);
+    color: var(--cyber-primary);
+    background: rgba(0, 255, 255, 0.06);
+}
+
+.priv-pill-btn.recommended {
+    border-color: rgba(168, 85, 247, 0.4);
+    color: var(--cyber-secondary);
+}
+
+.priv-pill-btn.recommended:hover {
+    border-color: var(--cyber-secondary);
+    color: #ffffff;
+    background: rgba(168, 85, 247, 0.2);
+}
+
+/* Modules Grid */
+.modules-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+}
+
+@media (max-width: 1100px) {
+    .modules-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .modules-grid {
+        grid-template-columns: 1fr;
+    }
+    .portal-card {
+        flex-direction: column;
+    }
+    .portal-sidebar {
+        width: 100%;
+        min-width: 100%;
+        border-right: none;
+        border-bottom: 1px solid rgba(0, 255, 255, 0.15);
+    }
+}
+
+.module-card {
+    background: rgba(10, 14, 18, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 0.9rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+    transition: border-color 0.2s;
+}
+
+.module-card:hover {
+    border-color: rgba(0, 255, 255, 0.3);
+}
+
+.module-card-title {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: var(--cyber-primary);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    padding-bottom: 0.4rem;
+}
+
+.privilege-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    cursor: pointer;
+    user-select: none;
+    padding: 0.2rem 0;
+}
+
+.privilege-checkbox {
+    margin-top: 0.2rem;
+    width: 16px;
+    height: 16px;
+    accent-color: #00ff88;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.privilege-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+}
+
+.privilege-name {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--cyber-text);
+    line-height: 1.2;
+}
+
+.privilege-sub {
+    font-size: 0.72rem;
+    color: var(--cyber-text-dim);
+    line-height: 1.2;
+}
+
+/* Submit Action Button */
+.portal-actions-row {
+    margin-top: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.portal-submit-btn {
+    width: auto;
+    align-self: center;
+    padding: 0.8rem 3rem;
+    background: var(--cyber-primary);
+    border: none;
+    border-radius: 99px;
+    color: #ffffff;
+    font-family: 'Inter', sans-serif;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.7rem;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 6px rgba(14, 165, 233, 0.2);
+}
+
+.portal-submit-btn:hover {
+    background: var(--cyber-secondary);
+    box-shadow: 0 0 15px rgba(168, 85, 247, 0.4);
+    text-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+    transform: translateY(-2px);
+}
+
+.portal-submit-btn:active {
+    transform: translateY(0);
+}
+
+.portal-submit-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    filter: grayscale(0.5);
+}
+
+.portal-footer-disclaimer {
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--cyber-text-dim);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    background: rgba(14, 165, 233, 0.05);
+    padding: 0.8rem 1.5rem;
+    border-radius: 8px;
+    border: 1px solid rgba(14, 165, 233, 0.1);
+}
+
+.portal-footer-disclaimer strong {
+    color: #ffffff;
+}
+
+/* Notification banner for pending_setup accounts */
+.pending-setup-banner {
+    /* removed gradient background */
+    border: 1px solid var(--cyber-warning);
+    border-radius: 8px;
+    padding: 0.9rem 1.2rem;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+}
+
+.pending-setup-left {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+}
+
+.pending-setup-icon {
+    font-size: 1.5rem;
+    color: var(--cyber-warning);
+}
+
+.pending-setup-title {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 800;
+    color: var(--cyber-warning);
+    letter-spacing: 0.5px;
+}
+
+.pending-setup-sub {
+    font-size: 0.82rem;
+    color: var(--cyber-text);
+}
+
+.pending-setup-btn {
+    background: var(--cyber-warning);
+    color: #000000;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 800;
+    padding: 0.45rem 0.9rem;
+    border-radius: 4px;
+    text-decoration: none;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.pending-setup-btn:hover {
+    background: #ffc107;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    transform: translateX(2px);
+}
+
+
+/* Hide default browser password reveal eye icons globally */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear,
+input[type="password"]::-webkit-contacts-auto-fill-button,
+input[type="password"]::-webkit-credentials-auto-fill-button {
+    display: none !important;
+}
+
+/* Fix for dropdown options visibility */
+option {
+    background-color: #080c14;
+    color: #0ea5e9;
+}
+

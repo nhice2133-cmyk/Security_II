@@ -1,0 +1,17 @@
+# Environment / secrets
+.env
+
+# IDE / OS artifacts
+.idea/
+.vscode/
+*.swp
+*.swo
+Thumbs.db
+.DS_Store
+
+# Logs that should never be committed
+otp_log.txt
+*.log
+
+# Setup token file (used by CLI admin creation scripts)
+.setup_token

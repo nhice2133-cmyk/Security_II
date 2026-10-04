@@ -1,2 +1,9 @@
 Username: superadmin
 Password: Admin@12345!
+
+Username:user.1	
+Password:User@1234
+
+
+Username:admin	
+Password:Admin@12345!

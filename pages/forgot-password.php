@@ -8,17 +8,24 @@ if (isset($_SESSION['user_id'])) {
 }
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Forgot Password — Neon Recovery</title>
+  <title>Forgot Password — CyberAuth System</title>
 
-  <!-- Fonts -->
+  <!-- Pre-render Theme Initialization (Prevents FOUC, defaults to Light) -->
+  <script>
+    (function() {
+      var theme = localStorage.getItem('auth_theme') || 'light';
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
+
+  <!-- Modern Typography -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
   <style>
     /* Step display overrides */
@@ -27,21 +34,31 @@ if (isset($_SESSION['user_id'])) {
   </style>
 
   <!-- Full theme styles -->
+  <link rel="stylesheet" href="../css/modern-design-system.css" />
   <link rel="stylesheet" href="../css/cyberpunk-questions.css" />
 </head>
 <body>
-  <!-- Animated background -->
+  <!-- Subtle Ambient background -->
   <div class="cyber-grid" aria-hidden="true"></div>
   <div class="neon-particles" aria-hidden="true"></div>
-  <div class="scan-lines" aria-hidden="true"></div>
 
   <!-- Header -->
   <header class="cyber-header">
     <div class="header-content">
-      <div class="logo-container"><span class="logo-icon">⚡</span><span class="logo-text">Cyber<span class="accent">Auth</span></span></div>
+      <a href="index.php" class="logo-container">
+        <span class="logo-icon">⚡</span>
+        <span class="logo-text">Cyber<span class="accent">Auth</span></span>
+      </a>
       <div class="header-actions">
-        <a href="index.php" class="cyber-link">Home</a>
-        <a href="login.php" class="cyber-link">Login</a>
+        <a href="index.php" class="nav-link cyber-link">Home</a>
+        <a href="login.php" class="nav-link cyber-link">Login</a>
+
+        <!-- Theme Toggle Switcher -->
+        <button type="button" class="theme-toggle-btn" id="themeToggleBtn" aria-label="Toggle theme" title="Toggle theme">
+          <span class="theme-toggle-icon theme-toggle-sun">☀️</span>
+          <span class="theme-toggle-icon theme-toggle-moon">🌙</span>
+          <span class="theme-toggle-text">Dark</span>
+        </button>
       </div>
     </div>
   </header>
@@ -176,5 +193,6 @@ if (isset($_SESSION['user_id'])) {
 
   <script src="../js/disable-rightclick.js"></script>
   <script src="../js/forgot-password.js"></script>
+  <script src="../js/theme-toggle.js"></script>
 </body>
 </html>

@@ -8,132 +8,155 @@ if (isset($_SESSION['user_id'])) {
 }
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - CyberAuth System</title>
-    <link rel="stylesheet" href="../css/cyberpunk-login.css">
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-</head>
-<body class="cyberpunk-bg">
+    <title>Sign In — CyberAuth System</title>
 
-<!-- Animated Background Elements -->
-<div class="cyber-grid"></div>
-<div class="neon-particles"></div>
-<div class="scan-lines"></div>
+    <!-- Pre-render Theme Initialization (Prevents FOUC, defaults to Light) -->
+    <script>
+      (function() {
+        var theme = localStorage.getItem('auth_theme') || 'light';
+        document.documentElement.setAttribute('data-theme', theme);
+      })();
+    </script>
+
+    <!-- Modern Typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <!-- Modern Design System & Login Styles -->
+    <link rel="stylesheet" href="../css/modern-design-system.css">
+    <link rel="stylesheet" href="../css/cyberpunk-login.css">
+</head>
+<body>
+
+<!-- Modern Subtle Ambient Canvas -->
+<div class="cyber-grid" aria-hidden="true"></div>
+<div class="neon-particles" aria-hidden="true"></div>
 
 <header class="cyber-header">
     <div class="header-content">
-        <div class="logo-container">
+        <a href="index.php" class="logo-container">
             <div class="logo-icon">⚡</div>
             <h1 class="logo-text">CYBER<span class="accent">AUTH</span></h1>
-        </div>
+        </a>
         <div class="header-actions">
             <a href="index.php" class="nav-link cyber-link">HOME</a>
             <a href="register.php" class="nav-link cyber-link">REGISTER</a>
+
+            <!-- Theme Toggle Switcher -->
+            <button type="button" class="theme-toggle-btn" id="themeToggleBtn" aria-label="Toggle theme" title="Toggle theme">
+                <span class="theme-toggle-icon theme-toggle-sun">☀️</span>
+                <span class="theme-toggle-icon theme-toggle-moon">🌙</span>
+                <span class="theme-toggle-text">Dark</span>
+            </button>
         </div>
     </div>
 </header>
 
 <main class="cyber-main">
     <div class="cyber-container">
-        <!-- Left Side - Compact Info Panel -->
+        <!-- Left Side - Modern Info Panel -->
         <div class="info-panel">
-            <div class="cyber-badge">
-                <span class="badge-text">SECURE</span>
-                <span class="badge-accent">ENCRYPTED</span>
-            </div>
-            
-            <h2 class="cyber-headline">NEURAL NETWORK ACCESS</h2>
-            <p class="cyber-lead">Enter the digital realm. Your credentials are protected by quantum encryption.</p>
-            
-            <div class="cyber-features-compact">
-                <div class="feature-compact">
-                    <span class="feature-icon">🔐</span>
-                    <span class="feature-text">Quantum Encryption</span>
+            <div>
+                <div class="cyber-badge">
+                    <span class="badge-text">SECURE LOGIN</span>
+                    <span class="badge-accent">ENCRYPTED</span>
                 </div>
-                <div class="feature-compact">
-                    <span class="feature-icon">⚡</span>
-                    <span class="feature-text">Lightning Fast</span>
-                </div>
-                <div class="feature-compact">
-                    <span class="feature-icon">🛡️</span>
-                    <span class="feature-text">Neural Firewall</span>
-                </div>
-            </div>
-            
-            <div class="cyber-stats-compact">
-                <div class="stat-compact">
-                    <span class="stat-number">99.9%</span>
-                    <span class="stat-label">Uptime</span>
-                </div>
-                <div class="stat-compact">
-                    <span class="stat-number">256-bit</span>
-                    <span class="stat-label">Encryption</span>
-                </div>
-                <div class="stat-compact">
-                    <span class="stat-number">0ms</span>
-                    <span class="stat-label">Latency</span>
+                
+                <h2 class="cyber-headline">Welcome back to CyberAuth</h2>
+                <p class="cyber-lead">Access your protected workspace. Your credentials are guarded by state-of-the-art security algorithms and intelligent session monitoring.</p>
+                
+                <div class="cyber-features-compact">
+                    <div class="feature-compact">
+                        <span class="feature-icon">🔐</span>
+                        <span class="feature-text">End-to-End Cryptographic Security</span>
+                    </div>
+                    <div class="feature-compact">
+                        <span class="feature-icon">⚡</span>
+                        <span class="feature-text">High Performance Low-Latency Sessions</span>
+                    </div>
+                    <div class="feature-compact">
+                        <span class="feature-icon">🛡️</span>
+                        <span class="feature-text">Continuous Session Integrity Shield</span>
+                    </div>
                 </div>
             </div>
             
-            <!-- Cyberpunk Decorations -->
-            <div class="cyber-decorations">
-                <div class="circuit-line"></div>
-                <div class="data-stream"></div>
-                <div class="hologram-effect"></div>
+            <div>
+                <div class="cyber-stats-compact">
+                    <div class="stat-compact">
+                        <span class="stat-number">99.99%</span>
+                        <span class="stat-label">Uptime</span>
+                    </div>
+                    <div class="stat-compact">
+                        <span class="stat-number">256-bit</span>
+                        <span class="stat-label">Encryption</span>
+                    </div>
+                    <div class="stat-compact">
+                        <span class="stat-number">&lt; 15ms</span>
+                        <span class="stat-label">Latency</span>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <!-- Right Side - Compact Login Terminal -->
+        <!-- Right Side - Modern Login Card -->
         <div class="terminal-container">
             <div class="terminal-frame">
-                <div class="terminal-header">
-                    <div class="terminal-dots">
-                        <span class="dot red"></span>
-                        <span class="dot yellow"></span>
-                        <span class="dot green"></span>
-                    </div>
-                    <div class="terminal-title">CYBERAUTH TERMINAL v2.1.7</div>
-                </div>
-                
                 <div class="terminal-screen">
                     <div class="terminal-content">
-                        <div class="terminal-prompt">
-                            <span class="prompt-text">root@cyberauth:~$</span>
-                            <span class="cursor-blink">_</span>
-                        </div>
-                        
                         <div class="login-section">
-                            <h3 class="terminal-title">ACCESS PROTOCOL INITIATED</h3>
-                            <p class="terminal-subtitle">Enter your neural credentials</p>
+                            <h3 class="terminal-title">Account Sign In</h3>
+                            <p class="terminal-subtitle">Enter your account username and password.</p>
+                            
+                            <?php if (isset($_GET['notice']) && $_GET['notice'] === 'rights_transferred'): ?>
+                                <div style="margin-bottom: 1.25rem; padding: 0.85rem 1.1rem; border: 1px solid var(--danger-border); background: var(--danger-light); color: var(--danger); border-radius: 12px; font-size: 0.88rem; display: flex; align-items: center; gap: 0.75rem; box-shadow: var(--shadow-xs);">
+                                    <span style="font-size: 1.25rem;">🔒</span>
+                                    <div>
+                                        <strong style="color: var(--text-primary); display: block; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 0.84rem;">RIGHTS TRANSFERRED</strong>
+                                        <span>Super Admin rights were transferred. You have been safely logged out. Please sign in with your user credentials.</span>
+                                    </div>
+                                </div>
+                            <?php elseif (isset($_GET['notice']) && $_GET['notice'] === 'handover_deactivated'): ?>
+                                <div style="margin-bottom: 1.25rem; padding: 0.85rem 1.1rem; border: 1px solid var(--warning-border, #f59e0b); background: var(--warning-light, rgba(245,158,11,0.1)); color: var(--warning, #d97706); border-radius: 12px; font-size: 0.88rem; display: flex; align-items: center; gap: 0.75rem; box-shadow: var(--shadow-xs);">
+                                    <span style="font-size: 1.25rem;">⏸️</span>
+                                    <div>
+                                        <strong style="color: var(--text-primary); display: block; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 0.84rem;">HANDOVER COMPLETED &mdash; ACCOUNT INACTIVE</strong>
+                                        <span>Your account was deactivated upon logout as part of the authorized Superadmin handover. Please contact the current Superadmin to request reactivation.</span>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
                             
                             <form class="cyber-form" id="loginForm" action="../php/login.php" method="POST">
+                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrfToken(), ENT_QUOTES, 'UTF-8'); ?>" />
                                 <div class="input-group">
                                     <label for="username" class="cyber-label">
                                         <span class="label-icon">👤</span>
                                         USERNAME
                                     </label>
                                     <div class="input-container">
-                                        <input type="text" id="username" name="username" class="cyber-input" />
-                                        <div class="input-glow"></div>
+                                        <input type="text" id="username" name="username" class="cyber-input" placeholder="Enter your username or email" autofocus />
                                     </div>
                                     <div class="error-message" id="username-error"></div>
                                 </div>
                                 
                                 <div class="input-group">
-                                    <label for="password" class="cyber-label">
-                                        <span class="label-icon">🔑</span>
-                                        PASSWORD
-                                    </label>
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.45rem;">
+                                        <label for="password" class="cyber-label" style="margin-bottom: 0;">
+                                            <span class="label-icon">🔑</span>
+                                            PASSWORD
+                                        </label>
+                                        <a href="forgot-password.php" class="cyber-link" style="font-size: 0.78rem; padding: 0;">Forgot?</a>
+                                    </div>
                                     <div class="input-container">
-                                        <input type="password" id="password" name="password" class="cyber-input" />
-                                        <button type="button" class="show-password cyber-btn-small" id="showPassword">
-                                            <span class="eye-icon" style="color:var(--cyber-primary); filter:drop-shadow(0 0 5px rgba(14,165,233,0.5));"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg></span>
+                                        <input type="password" id="password" name="password" class="cyber-input" placeholder="Enter your password" />
+                                        <button type="button" class="show-password" id="showPassword" aria-label="Show password">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
                                         </button>
-                                        <div class="input-glow"></div>
                                     </div>
                                     <div class="error-message" id="password-error"></div>
                                 </div>
@@ -141,26 +164,24 @@ if (isset($_SESSION['user_id'])) {
                                 <div class="login-attempts" id="loginAttempts">
                                     <div class="attempts-warning">
                                         <span class="warning-icon">⚠️</span>
-                                        <span class="attempts-text">ACCESS DENIED: <span id="attemptCount">0</span>
+                                        <span class="attempts-text">ACCESS DENIED: <span id="attemptCount">0</span></span>
                                     </div>
                                     <div class="timer-text" id="timerText" style="display: none;"></div>
                                     <div class="forgot-prompt" id="forgotPrompt">
                                         <span class="forgot-text">Forgot Password?</span>
-                                        <a href="forgot-password.php" class="cyber-link" id="forgotPromptLink">Reset</a>
+                                        <a href="forgot-password.php" class="cyber-link" id="forgotPromptLink">Reset Now</a>
                                     </div>
                                 </div>
                                 
                                 <button type="submit" class="cyber-btn" id="loginBtn">
-                                    <span class="btn-text">INITIATE LOGIN</span>
-                                    <div class="btn-glow"></div>
+                                    <span class="btn-text">Sign In</span>
                                 </button>
                                 
                                 <div class="form-links">
                                     <p class="switch-form">
-                                        New to the network? 
-                                        <a href="register.php" class="cyber-link" id="registerLink">REGISTER</a>
+                                        New to the platform? 
+                                        <a href="register.php" class="cyber-link" id="registerLink">Create an account</a>
                                     </p>
-                                    <a href="forgot-password.php" class="cyber-link">RECOVER CREDENTIALS</a>
                                 </div>
                             </form>
                         </div>
@@ -174,17 +195,18 @@ if (isset($_SESSION['user_id'])) {
 <footer class="cyber-footer">
     <div class="footer-content">
         <div class="footer-text">
-            <span>&copy; 2025 CYBERAUTH SYSTEM</span>
-            <span class="footer-accent">NEURAL NETWORK v2.1.7</span>
+            <span>&copy; 2026 CyberAuth Security System</span>
+            <span class="footer-accent">Identity Access Protocol v3.0</span>
         </div>
         <div class="footer-status">
             <span class="status-indicator online"></span>
-            <span class="status-text">SYSTEM ONLINE</span>
+            <span class="status-text">All Systems Operational</span>
         </div>
     </div>
 </footer>
 
 <script src="../js/disable-rightclick.js"></script>
 <script src="../js/login-validation.js?v=<?php echo time(); ?>"></script>
+<script src="../js/theme-toggle.js"></script>
 </body>
 </html>

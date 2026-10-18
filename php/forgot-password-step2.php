@@ -5,11 +5,15 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     sendJsonResponse(false, 'Invalid request method');
 }
 
-$idNumber = sanitizeInput($_POST['idNumber'] ?? '');
-$otp = sanitizeInput($_POST['otp'] ?? '');
+$idNumber = trim(sanitizeInput($_POST['idNumber'] ?? ''));
+$otp = trim(sanitizeInput($_POST['otp'] ?? ''));
 
-if (empty($idNumber) || empty($otp)) {
+if ($idNumber === '' || $otp === '') {
     sendJsonResponse(false, 'ID Number and OTP are required');
+}
+
+if (!preg_match('/^\d{6}$/', $otp)) {
+    sendJsonResponse(false, 'OTP must be a 6-digit number');
 }
 
 $db = new Database();

@@ -1,2076 +1,1176 @@
-const ALLOWED_EXTENSIONS = ['jr', 'sr', 'ii', 'iii', 'iv', 'v'];
-const ALLOWED_EXTENSION_SET = new Set(ALLOWED_EXTENSIONS);
-const EXTENSION_LABELS = {
-    jr: 'Jr',
-    sr: 'Sr',
-    ii: 'II',
-    iii: 'III',
-    iv: 'IV',
-    v: 'V'
-};
-const EXTENSION_DISPLAY_LIST = 'Jr, Sr, II, III, IV, V';
+/**
+ * Public Registration Form - 3-Step Wizard Controller
+ * Handles client-side navigation, real-time input validation, age calculation,
+ * password strength evaluation, security question synchronization, and AJAX submission.
+ */
 
-function isValidExtensionValue(value) {
-    if (!value) return false;
-    return ALLOWED_EXTENSION_SET.has(value.toLowerCase());
-}
+document.addEventListener('DOMContentLoaded', () => {
+    // ── Elements ─────────────────────────────────────────────────────────────
+    const form = document.getElementById('registrationWizardForm');
+    if (!form) return;
 
-function matchesExtensionPrefix(value) {
-    if (!value) return true;
-    const lower = value.toLowerCase();
-    return ALLOWED_EXTENSIONS.some(ext => ext.startsWith(lower));
-}
+    const step1Pane = document.getElementById('step1Pane');
+    const step2Pane = document.getElementById('step2Pane');
+    const step3Pane = document.getElementById('step3Pane');
+    const panes = [step1Pane, step2Pane, step3Pane];
 
-function formatExtensionValue(value) {
-    if (!value) return '';
-    const lower = value.toLowerCase();
-    return EXTENSION_LABELS[lower] || '';
-}
+    const step1NextBtn = document.getElementById('step1NextBtn');
+    const step2BackBtn = document.getElementById('step2BackBtn');
+    const step2NextBtn = document.getElementById('step2NextBtn');
+    const step3BackBtn = document.getElementById('step3BackBtn');
+    const completeRegBtn = document.getElementById('completeRegBtn');
+    const completeRegText = document.getElementById('completeRegText');
 
-// Cyberpunk Registration System
-class CyberpunkRegistration {
-    constructor() {
-        this.form = document.getElementById('registrationForm');
-        this.init();
-    }
+    // Inputs - Step 1
+    const idNumberInput = document.getElementById('idNumber');
+    const firstNameInput = document.getElementById('firstName');
+    const middleInitialInput = document.getElementById('middleInitial');
+    const lastNameInput = document.getElementById('lastName');
+    const suffixSelect = document.getElementById('suffix');
+    const sexSelect = document.getElementById('sex');
+    const birthDateInput = document.getElementById('birthDate');
+    const ageInput = document.getElementById('age');
 
-    init() {
-        this.setupEventListeners();
-        this.setupPasswordStrength();
-        this.setupRealTimeValidation();
-        this.setupCapitalizationValidation();
-        this.addCyberpunkEffects();
-        this.initializeShowPasswordIcons();
-    }
+    // Inputs - Step 2
+    const purokStreetInput = document.getElementById('purokStreet');
+    const barangayInput = document.getElementById('barangay');
+    const cityInput = document.getElementById('city');
+    const provinceInput = document.getElementById('province');
+    const countryInput = document.getElementById('country');
+    const zipCodeInput = document.getElementById('zipCode');
 
-    setupEventListeners() {
-        this.form.addEventListener('submit', (e) => this.handleSubmit(e));
+    // Inputs - Step 3
+    const emailInput = document.getElementById('email');
+    const usernameInput = document.getElementById('username');
+    const passwordInput = document.getElementById('password');
+    const confirmPasswordInput = document.getElementById('confirmPassword');
+    const q1Select = document.getElementById('q1');
+    const a1Input = document.getElementById('a1');
+    const q2Select = document.getElementById('q2');
+    const a2Input = document.getElementById('a2');
+    const q3Select = document.getElementById('q3');
+    const a3Input = document.getElementById('a3');
+
+    // Strength Meter
+    const strSeg1 = document.getElementById('strSeg1');
+    const strSeg2 = document.getElementById('strSeg2');
+    const strSeg3 = document.getElementById('strSeg3');
+    const strSeg4 = document.getElementById('strSeg4');
+    const strengthBadge = document.getElementById('strengthBadge');
+    const toastContainer = document.getElementById('regToastContainer');
+
+    // ── State ────────────────────────────────────────────────────────────────
+    let currentStep = 1;
+    let isDirty = false;
+    let isSubmitting = false;
+
+    // Track field interaction states
+    const fieldStates = {
+        firstName: { touched: false, wasBlurred: false, lastError: null },
+        middleInitial: { touched: false, wasBlurred: false, lastError: null },
+        lastName: { touched: false, wasBlurred: false, lastError: null },
+        suffix: { touched: false, wasBlurred: false, lastError: null },
+        sex: { touched: false, wasBlurred: false, lastError: null },
+        birthDate: { touched: false, wasBlurred: false, lastError: null },
+        age: { touched: false, wasBlurred: false, lastError: null },
+        purokStreet: { touched: false, wasBlurred: false, lastError: null },
+        barangay: { touched: false, wasBlurred: false, lastError: null },
+        city: { touched: false, wasBlurred: false, lastError: null },
+        province: { touched: false, wasBlurred: false, lastError: null },
+        country: { touched: false, wasBlurred: false, lastError: null },
+        zipCode: { touched: false, wasBlurred: false, lastError: null },
+        email: { touched: false, wasBlurred: false, lastError: null, isDuplicate: false },
+        username: { touched: false, wasBlurred: false, lastError: null, isDuplicate: false },
+        password: { touched: false, wasBlurred: false, lastError: null },
+        confirmPassword: { touched: false, wasBlurred: false, lastError: null },
+        q1: { touched: false, wasBlurred: false, lastError: null },
+        a1: { touched: false, wasBlurred: false, lastError: null },
+        q2: { touched: false, wasBlurred: false, lastError: null },
+        a2: { touched: false, wasBlurred: false, lastError: null },
+        q3: { touched: false, wasBlurred: false, lastError: null },
+        a3: { touched: false, wasBlurred: false, lastError: null }
+    };
+
+    // Track dirty form
+    form.addEventListener('input', () => { isDirty = true; });
+    form.addEventListener('change', () => { isDirty = true; });
+
+    window.addEventListener('beforeunload', (e) => {
+        if (isDirty && !isSubmitting) {
+            e.preventDefault();
+            e.returnValue = '';
+        }
+    });
+
+    // Setup accessibility attributes
+    document.querySelectorAll('.custom-input, .custom-select').forEach(input => {
+        if (input.id) {
+            input.setAttribute('aria-describedby', `${input.id}Error`);
+        }
+    });
+
+    // ── Load Next Available ID Preview ───────────────────────────────────────
+    fetch('../php/get_next_id.php')
+        .then(res => res.json())
+        .then(data => {
+            if (data.success && data.idNumber) {
+                idNumberInput.value = data.idNumber;
+            } else {
+                const curYear = new Date().getFullYear();
+                idNumberInput.value = `${curYear}-0001`;
+            }
+        })
+        .catch(() => {
+            const curYear = new Date().getFullYear();
+            idNumberInput.value = `${curYear}-0001`;
+        });
+
+    // ── Helpers: Toast Notifications ─────────────────────────────────────────
+    function showToast(message, type = 'info', duration = 4000) {
+        if (!toastContainer) return;
+        const toast = document.createElement('div');
+        toast.className = `reg-toast ${type === 'success' ? 'reg-toast-success' : type === 'error' ? 'reg-toast-error' : ''}`;
         
-        // Real-time validation
-        const inputs = this.form.querySelectorAll('.cyber-input');
-        const fieldsWithSpecificValidation = ['firstName', 'lastName', 'middleName', 'extension', 'purok', 'barangay', 'city', 'province', 'email', 'username'];
-        inputs.forEach(input => {
-            input.addEventListener('blur', () => this.validateField(input));
-            // Only clear errors on input for fields without specific validation
-            if (!fieldsWithSpecificValidation.includes(input.id)) {
-                input.addEventListener('input', () => this.clearError(input));
-            }
-        });
+        const icon = type === 'success' ? '✓' : type === 'error' ? '⚠' : 'ℹ';
+        toast.innerHTML = `<span style="font-size: 1.1rem; color: ${type === 'success' ? '#22c55e' : type === 'error' ? '#ef4444' : '#00e5ff'};">${icon}</span> <span>${escapeHtml(message)}</span>`;
+        toastContainer.appendChild(toast);
 
-        // Email validation on blur - show warnings for invalid characters
-        const email = document.getElementById('email');
-        if (email) {
-            email.addEventListener('blur', () => {
-                const value = email.value;
-                const errorElement = document.getElementById('emailError');
-                if (!value || !value.trim()) {
-                    // Show required error when field is empty
-                    if (errorElement) {
-                        errorElement.textContent = 'Email is required';
-                        errorElement.classList.add('show');
-                    }
-                    email.style.borderColor = 'var(--cyber-error)';
-                    email.style.boxShadow = '0 0 10px rgba(255, 0, 64, 0.3)';
-                } else {
-                    // Check for specific warnings in priority order
-                    const warningMsg = this.getEmailWarning(value);
-                    if (warningMsg) {
-                        if (errorElement) {
-                            this.showWarning(email, errorElement, warningMsg);
-                        }
-                    } else if (!this.isValidEmail(value.trim())) {
-                        // Only show error if email format is invalid after trimming
-                        if (errorElement) {
-                            errorElement.textContent = 'Invalid email format';
-                            errorElement.classList.add('show');
-                        }
-                        email.style.borderColor = 'var(--cyber-error)';
-                        email.style.boxShadow = '0 0 10px rgba(255, 0, 64, 0.3)';
-                    } else {
-                        this.clearError(email);
-                    }
-                }
-            });
-            email.addEventListener('input', () => {
-                // Only clear errors/warnings, don't auto-correct
-                this.clearError(email);
-            });
-        }
-
-        // Username validation - real-time validation for "lowercase.#" format
-        const username = document.getElementById('username');
-        if (username) {
-            // Real-time validation on input
-            username.addEventListener('input', () => {
-                const value = username.value;
-                const errorElement = document.getElementById('usernameError');
-                
-                if (!value) {
-                    this.clearError(username);
-                    return;
-                }
-                
-                // Real-time validation - check for errors
-                const errorMsg = this.getUsernameError(value);
-                const warningMsg = this.getUsernameWarning(value);
-                
-                if (errorMsg) {
-                    if (errorElement) {
-                        errorElement.textContent = errorMsg;
-                        errorElement.classList.add('show');
-                    }
-                    username.style.borderColor = 'var(--cyber-error)';
-                    username.style.boxShadow = '0 0 10px rgba(255, 0, 64, 0.3)';
-                } else if (warningMsg) {
-                    if (errorElement) {
-                        this.showWarning(username, errorElement, warningMsg);
-                    }
-                } else {
-                    this.clearError(username);
-                }
-            });
-            
-            username.addEventListener('blur', () => {
-                const value = username.value;
-                const errorElement = document.getElementById('usernameError');
-                if (!value || !value.trim()) {
-                    // Show required error when field is empty
-                    if (errorElement) {
-                        errorElement.textContent = 'Username is required';
-                        errorElement.classList.add('show');
-                    }
-                    username.style.borderColor = 'var(--cyber-error)';
-                    username.style.boxShadow = '0 0 10px rgba(255, 0, 64, 0.3)';
-                } else {
-                    // Check for specific issues in priority order - show only one warning at a time
-                    const warningMsg = this.getUsernameWarning(value);
-                    if (warningMsg) {
-                        if (errorElement) {
-                            this.showWarning(username, errorElement, warningMsg);
-                        }
-                    } else {
-                        const errorMsg = this.getUsernameError(value);
-                        if (errorMsg) {
-                            if (errorElement) {
-                                errorElement.textContent = errorMsg;
-                                errorElement.classList.add('show');
-                            }
-                            username.style.borderColor = 'var(--cyber-error)';
-                            username.style.boxShadow = '0 0 10px rgba(255, 0, 64, 0.3)';
-                        } else {
-                            this.clearError(username);
-                        }
-                    }
-                }
-            });
-        }
-
-        // Password confirmation
-        const password = document.getElementById('password');
-        const confirmPassword = document.getElementById('confirmPassword');
-        
-        if (password && confirmPassword) {
-            confirmPassword.addEventListener('input', () => {
-                this.validatePasswordMatch();
-            });
-        }
-
-        // Age auto-calculation
-        const birthDate = document.getElementById('birthDate');
-        const age = document.getElementById('age');
-        
-        if (birthDate && age) {
-            birthDate.addEventListener('change', () => {
-                this.calculateAge();
-            });
-            birthDate.addEventListener('input', () => {
-                this.calculateAge();
-            });
-        }
-
-        // Phone number validation (same as other fields)
-        const phoneNumber = document.getElementById('phoneNumber');
-        if (phoneNumber) {
-            phoneNumber.addEventListener('blur', () => {
-                this.validateField(phoneNumber);
-            });
-            phoneNumber.addEventListener('input', function(e) {
-                let val = this.value.replace(/\D/g, '');
-                if (val.length > 11) val = val.slice(0, 11);
-                this.value = val;
-            });
-        }
-
-        // Auto-populate full address
-        const addressField = document.getElementById('address');
-        const updateAddress = () => {
-            const parts = [
-                document.getElementById('purok')?.value.trim(),
-                document.getElementById('barangay')?.value.trim(),
-                document.getElementById('city')?.value.trim(),
-                document.getElementById('province')?.value.trim(),
-                document.getElementById('country')?.value.trim()
-            ].filter(Boolean);
-            if (addressField) {
-                addressField.value = parts.join(', ');
-            }
-        };
-
-        ['purok', 'barangay', 'city', 'province', 'country'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) {
-                el.addEventListener('input', updateAddress);
-                el.addEventListener('change', updateAddress);
-            }
-        });
-    }
-
-    initializeShowPasswordIcons() {
-        // Initialize SVG icons for all show-password buttons
-        const buttons = this.form.querySelectorAll('.show-password');
-        buttons.forEach(btn => {
-            btn.setAttribute('aria-label', 'Show password');
-            btn.setAttribute('aria-pressed', 'false');
-            btn.innerHTML = getEyeSVG(false);
-        });
-    }
-
-    setupCapitalizationValidation() {
-        const capitalizationFieldIds = ['extension'];
-        capitalizationFieldIds.forEach(id => {
-            const el = document.getElementById(id);
-            if (el) {
-                const isOptional = (id === 'extension');
-                const validateField = () => {
-                    const result = this.validateCapitalization(el, isOptional);
-                    const errorElement = document.getElementById(id + 'Error');
-                    if (!result.ok) {
-                        if (errorElement) {
-                            this.showError(el, errorElement, result.message || 'Invalid format');
-                        }
-                    } else if (result.warning) {
-                        if (errorElement) {
-                            this.showWarning(el, errorElement, result.message || 'Invalid format');
-                        }
-                    } else {
-                        this.clearError(el);
-                    }
-                };
-                el.addEventListener('blur', validateField);
-                el.addEventListener('input', () => {
-                    // Only validate if field has value (to avoid showing errors while typing)
-                    if (el.value.trim().length >= 1) {
-                        validateField();
-                    } else {
-                        this.clearError(el);
-                    }
-                });
-            }
-        });
-    }
-
-    validateCapitalization(field, isOptional = false) {
-        // Read value without modifying it - use original value including spaces
-        const raw = field.value;
-        const trimmed = raw.trim();
-        if (!trimmed && isOptional) return { ok: true };
-        if (!trimmed && !isOptional) {
-            // Show field-specific required message
-            const fieldName = field.id === 'firstName' ? 'First name' : 
-                            field.id === 'lastName' ? 'Last name' : 
-                            field.id === 'middleName' ? 'Middle name' : 'This field';
-            return { ok: false, message: `${fieldName} is Required` };
-        }
-
-        const fieldId = field.id;
-
-        // Name fields validation (firstName, lastName, middleName): show warnings in priority order (like address fields)
-        if (fieldId === 'firstName' || fieldId === 'lastName' || fieldId === 'middleName') {
-            // Priority 1: Check for leading/trailing spaces
-            if (raw !== trimmed) {
-                return { ok: true, warning: true, message: 'Warning: Remove leading or trailing spaces' };
-            }
-            
-            // Priority 2: Check for multiple spaces
-            if (/\s{2,}/.test(raw)) {
-                return { ok: true, warning: true, message: 'Warning: Use single spaces between words' };
-            }
-            
-            // Priority 3: Check for capitalization (Title Case)
-            if (trimmed.length > 0 && !this.isProperTitleCase(trimmed)) {
-                const warningMsg = this.getTitleCaseWarning(trimmed);
-                return { ok: true, warning: true, message: warningMsg || 'Warning: Use Title Case format' };
-            }
-            
-            // Priority 4: Check for invalid characters
-            // Allow: letters (a-z, A-Z), spaces, hyphens (-), apostrophes ('), and periods (.)
-            if (/[^a-zA-Z\s\-'\.]/.test(raw)) {
-                const invalidChars = raw.match(/[^a-zA-Z\s\-'\.]/g);
-                if (invalidChars) {
-                    const uniqueChars = [...new Set(invalidChars)];
-                    return { ok: true, warning: true, message: `Warning: Invalid characters: ${uniqueChars.join(', ')}` };
-                }
-            }
-            
-            // Priority 5: Check if contains numbers
-            if (/\d/.test(raw)) {
-                return { ok: true, warning: true, message: 'Warning: Numbers are not allowed in name fields' };
-            }
-        }
-
-        // Address fields validation
-        if (fieldId === 'purok') {
-            // Purok: similar to other address fields but can start with a number
-            // Priority 1: Check for leading/trailing spaces
-            if (raw !== trimmed) {
-                return { ok: true, warning: true, message: 'Warning: Remove leading or trailing spaces' };
-            }
-            
-            // Priority 2: Check for multiple spaces
-            if (/\s{2,}/.test(raw)) {
-                return { ok: true, warning: true, message: 'Warning: Use single spaces between words' };
-            }
-            
-            // Priority 3: Check for capitalization (Title Case - first letter of each word capitalized, rest lowercase)
-            if (trimmed.length > 0 && !this.isProperTitleCase(trimmed)) {
-                const warningMsg = this.getTitleCaseWarning(trimmed);
-                return { ok: true, warning: true, message: warningMsg || 'Warning: Use Title Case format' };
-            }
-            
-            // Priority 4: Check for invalid characters
-            if (/[^a-zA-Z0-9\s\-'\.\,]/.test(raw)) {
-                const invalidChars = raw.match(/[^a-zA-Z0-9\s\-'\.\,]/g);
-                if (invalidChars) {
-                    const uniqueChars = [...new Set(invalidChars)];
-                    return { ok: true, warning: true, message: `Warning: Invalid characters: ${uniqueChars.join(', ')}` };
-            }
-            }
-            
-            // Note: Purok CAN start with a number (unlike other address fields)
-        } else if (fieldId === 'extension') {
-            // Check for spaces in extension
-            if (/\s/.test(raw)) {
-                return { ok: true, warning: true, message: 'Warning: Extension cannot contain spaces' };
-            }
-            // Extension must be 1-3 letters only
-            if (!/^[A-Za-z]{1,3}$/.test(trimmed)) {
-                return { ok: false, message: 'Extension must be 1-3 letters (letters only)' };
-            }
-            if (!isValidExtensionValue(trimmed)) {
-                return { ok: false, message: `Extension must be one of: ${EXTENSION_DISPLAY_LIST}` };
-            }
-            // Check capitalization for extension
-            const expectedFormat = formatExtensionValue(trimmed);
-            // For Jr and Sr, require exact case match (not lowercase)
-            if (trimmed.toLowerCase() === 'jr' || trimmed.toLowerCase() === 'sr') {
-                if (trimmed !== expectedFormat) {
-                    return { ok: false, message: `Extension must be "${expectedFormat}" (not "${trimmed}")` };
-                }
-            } else if (trimmed !== expectedFormat) {
-                // For other extensions (II, III, IV, V), show warning
-                return { ok: true, warning: true, message: `Warning: Extension should be formatted as "${expectedFormat}"` };
-            }
-        } else if (fieldId === 'province' || fieldId === 'city' || fieldId === 'barangay') {
-            // Address fields: show warnings in priority order (like name fields)
-            // Priority 1: Check for leading/trailing spaces
-            if (raw !== trimmed) {
-                return { ok: true, warning: true, message: 'Warning: Remove leading or trailing spaces' };
-            }
-            
-            // Priority 2: Check for multiple spaces
-            if (/\s{2,}/.test(raw)) {
-                return { ok: true, warning: true, message: 'Warning: Use single spaces between words' };
-            }
-            
-            // Priority 3: Check for capitalization (Title Case - first letter of each word capitalized, rest lowercase)
-            if (trimmed.length > 0 && !this.isProperTitleCase(trimmed)) {
-                const warningMsg = this.getTitleCaseWarning(trimmed);
-                return { ok: true, warning: true, message: warningMsg || 'Warning: Use Title Case format' };
-            }
-            
-            // Priority 4: Check for invalid characters
-            if (/[^a-zA-Z0-9\s\-'\.\,]/.test(raw)) {
-                const invalidChars = raw.match(/[^a-zA-Z0-9\s\-'\.\,]/g);
-                if (invalidChars) {
-                    const uniqueChars = [...new Set(invalidChars)];
-                    return { ok: true, warning: true, message: `Warning: Invalid characters: ${uniqueChars.join(', ')}` };
-                }
-            }
-            
-            // Priority 5: Check if starts with number
-            if (/^\d/.test(raw)) {
-                return { ok: true, warning: true, message: 'Warning: Cannot start with a number' };
-            }
-        }
-
-        // Check for 3 consecutive letters (for name fields and address fields including purok)
-        // This is a critical error, not a warning
-        const lowerValue = trimmed.toLowerCase();
-        const skipConsecutiveCheck = (fieldId === 'extension' && lowerValue === 'iii');
-
-        if (!skipConsecutiveCheck && this.hasConsecutiveLetters(lowerValue)) {
-            return { ok: false, message: 'Cannot contain 3 consecutive letters' };
-        }
-
-        return { ok: true };
-    }
-
-    setupPasswordStrength() {
-        const password = document.getElementById('password');
-        const strengthIndicator = document.getElementById('passwordStrength');
-        
-        if (password && strengthIndicator) {
-            password.addEventListener('input', () => {
-                const strength = this.calculatePasswordStrength(password.value);
-                this.updatePasswordStrength(strength, strengthIndicator);
-            });
-        }
-    }
-
-    setupRealTimeValidation() {
-        // ID Number - auto-correction removed, validation with warnings is handled elsewhere
-        const idNumber = document.getElementById('idNumber');
-        if (idNumber) {
-            idNumber.addEventListener('input', (e) => {
-                // Only clear errors/warnings, don't auto-correct
-                this.clearError(e.target);
-            });
-        }
-
-        // Zip code - validation and input restriction
-        const zipCode = document.getElementById('zipCode');
-        if (zipCode) {
-            // Restrict input to numbers only
-            zipCode.addEventListener('input', (e) => {
-                const value = e.target.value;
-                const errorElement = document.getElementById('zipCodeError');
-                
-                // Remove any non-digit characters
-                const digitsOnly = value.replace(/\D/g, '');
-                if (value !== digitsOnly) {
-                    e.target.value = digitsOnly;
-                }
-                
-                // Limit to 4 digits
-                if (digitsOnly.length > 4) {
-                    e.target.value = digitsOnly.substring(0, 4);
-                }
-                
-                // Clear errors on input
-                this.clearError(e.target);
-            });
-            
-            // Validate on blur
-            zipCode.addEventListener('blur', () => {
-                this.validateField(zipCode);
-            });
-            
-            // Block wheel changes on number inputs
-            zipCode.addEventListener('wheel', (e) => e.preventDefault(), { passive: false });
-        }
-
-        // Phone number - check for letters in real-time
-        const phoneOnly = document.getElementById('phoneNumber');
-        if (phoneOnly) {
-            phoneOnly.addEventListener('input', (e) => {
-                const value = e.target.value;
-                const errorElement = document.getElementById('phoneNumberError');
-                
-                // Check for letters in real-time
-                if (/[a-zA-Z]/.test(value)) {
-                    if (errorElement) {
-                        errorElement.textContent = 'Phone number cannot contain letters';
-                        errorElement.classList.add('show');
-                    }
-                    phoneOnly.style.borderColor = 'var(--cyber-error)';
-                    phoneOnly.style.boxShadow = '0 0 10px rgba(255, 0, 64, 0.3)';
-                } else {
-                    // Clear error if no letters
-                    this.clearError(phoneOnly);
-                }
-            });
-            // Block wheel changes on number-like inputs in some browsers
-            phoneOnly.addEventListener('wheel', (e) => e.preventDefault(), { passive: false });
-        }
-
-        // Extension field - auto-correction removed, validation with warnings is handled in setupCapitalizationValidation()
-        const extension = document.getElementById('extension');
-        if (extension) {
-            extension.addEventListener('input', (e) => {
-                // Only clear errors/warnings, don't auto-correct
-                this.clearError(e.target);
-            });
-            // Remove keypress prevention - let users type freely
-        }
-
-        // Name fields (firstName, lastName, middleName): real-time sequential validation
-        const self = this;
-        ['firstName', 'lastName', 'middleName'].forEach(function(fieldId) {
-            const field = document.getElementById(fieldId);
-            if (field) {
-                const options = { isOptional: fieldId === 'middleName' };
-                field.addEventListener('input', () => {
-                    // Only validate if field has value, otherwise clear error while typing
-                    if (field.value.trim().length > 0) {
-                    self.validateNameInput(field, options);
-                    } else {
-                        // Clear error while typing if field becomes empty
-                        self.clearError(field);
-                    }
-                });
-                field.addEventListener('blur', () => {
-                    // Always validate on blur, even if empty (to show required error)
-                    self.validateNameInput(field, options);
-                });
-            }
-        });
-
-        // Address fields (barangay, city, province): sequential validation (cannot start with number)
-        ['barangay', 'city', 'province'].forEach(function(fieldId) {
-            const field = document.getElementById(fieldId);
-            if (field) {
-                // Set user-friendly labels
-                const fieldLabels = {
-                    'province': 'Province',
-                    'city': 'City',
-                    'barangay': 'Barangay'
-                };
-                const options = {
-                    label: fieldLabels[fieldId] || fieldId.charAt(0).toUpperCase() + fieldId.slice(1),
-                    allowLeadingNumbers: false,
-                    allowedPattern: /[^a-zA-Z0-9\s\-'\.,]/g,
-                    invalidMessage: 'Invalid char',
-                    requireTitleCase: true
-                };
-                field.addEventListener('input', () => {
-                    self.validateAddressInput(field, options);
-                });
-                field.addEventListener('blur', () => {
-                    self.validateAddressInput(field, options);
-                });
-            }
-        });
-
-        // Purok field: similar to other address fields but can start with a number
-        const purok = document.getElementById('purok');
-        if (purok) {
-            // Prevent typing spaces at the start (like other address fields)
-            purok.addEventListener('keypress', (e) => {
-                const value = purok.value;
-                const cursorPos = purok.selectionStart;
-                
-                // Allow control keys (Ctrl, Cmd, Alt, etc.)
-                if (e.ctrlKey || e.metaKey || e.altKey) {
-                    return;
-                }
-                
-                // Allow navigation and deletion keys
-                if (['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Tab', 'Home', 'End'].includes(e.key)) {
-                    return;
-                }
-                
-                // Prevent leading spaces (but allow numbers at start)
-                if (e.key === ' ' && (value.length === 0 || cursorPos === 0)) {
-                    e.preventDefault();
-                    const errorElement = document.getElementById('purokError');
-                    if (errorElement) {
-                        errorElement.textContent = 'No leading space';
-                        errorElement.classList.add('show');
-                        setTimeout(() => {
-                            errorElement.textContent = '';
-                            errorElement.classList.remove('show');
-                        }, 2000);
-                    }
-                }
-            });
-            
-            // Block wheel changes on number inputs
-            purok.addEventListener('wheel', (e) => e.preventDefault(), { passive: false });
-
-            const purokOptions = {
-                label: 'Purok/Street',
-                allowLeadingNumbers: true,
-                allowedPattern: /[^A-Za-z0-9\s\-]/g,
-                invalidMessage: 'Invalid char',
-                requireTitleCase: true
-            };
-            purok.addEventListener('input', () => {
-                self.validateAddressInput(purok, purokOptions);
-            });
-            purok.addEventListener('blur', () => {
-                self.validateAddressInput(purok, purokOptions);
-            });
-        }
-
-        // Province, City, Barangay: must NOT start with a number
-        ['province', 'city', 'barangay'].forEach(function(fieldId) {
-            const field = document.getElementById(fieldId);
-            if (field) {
-                // Prevent typing digits at the start
-                field.addEventListener('keypress', (e) => {
-                    const value = field.value;
-                    const cursorPos = field.selectionStart;
-                    
-                    // Allow control keys (Ctrl, Cmd, Alt, etc.)
-                    if (e.ctrlKey || e.metaKey || e.altKey) {
-                        return;
-                    }
-                    
-                    // Allow navigation and deletion keys
-                    if (['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Tab', 'Home', 'End'].includes(e.key)) {
-                        return;
-                    }
-                    
-                    // If field is empty or cursor is at start, don't allow digits
-                    if ((value.length === 0 || cursorPos === 0) && /\d/.test(e.key)) {
-                        e.preventDefault();
-                        // Show error message
-                        const errorElement = document.getElementById(fieldId + 'Error');
-                        if (errorElement) {
-                            errorElement.textContent = 'Cannot start with number';
-                            errorElement.classList.add('show');
-                            setTimeout(() => {
-                                errorElement.textContent = '';
-                                errorElement.classList.remove('show');
-                            }, 2000);
-                        }
-                    }
-                });
-                
-                // Also check on input to handle paste operations
-                field.addEventListener('input', (e) => {
-                    // Only clear errors/warnings, don't auto-correct
-                    this.clearError(e.target);
-                });
-            }
-        });
-    }
-
-    addCyberpunkEffects() {
-        // Add glitch effect to inputs on focus
-        const inputs = document.querySelectorAll('.cyber-input');
-        inputs.forEach(input => {
-            input.addEventListener('focus', () => {
-                this.addGlitchEffect(input);
-            });
-        });
-
-        // Add terminal typing effect
-        this.simulateTerminalTyping();
-    }
-
-    simulateTerminalTyping() {
-        const prompt = document.querySelector('.terminal-prompt .prompt-text');
-        if (prompt) {
-            const text = 'user@neuralnet:~$';
-            prompt.textContent = '';
-            
-            let i = 0;
-            const typeWriter = () => {
-                if (i < text.length) {
-                    prompt.textContent += text.charAt(i);
-                    i++;
-                    setTimeout(typeWriter, 100);
-                }
-            };
-            
-            setTimeout(typeWriter, 1000);
-        }
-    }
-
-    addGlitchEffect(element) {
-        element.style.textShadow = '2px 0 #ff0080, -2px 0 #00ffff';
         setTimeout(() => {
-            element.style.textShadow = 'none';
-        }, 200);
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateX(40px)';
+            setTimeout(() => { toast.remove(); }, 300);
+        }, duration);
     }
 
-    calculateAge() {
-        const birthDate = document.getElementById('birthDate');
-        const age = document.getElementById('age');
-        
-        if (birthDate && age) {
-            if (birthDate.value) {
-                const today = new Date();
-                const birth = new Date(birthDate.value);
-                let calculatedAge = today.getFullYear() - birth.getFullYear();
-                const monthDiff = today.getMonth() - birth.getMonth();
-                
-                if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-                    calculatedAge--;
-                }
-                
-                age.value = calculatedAge;
-                // Clear any errors when age is calculated
-                this.clearError(age);
-            } else {
-                // Clear age if birthdate is cleared
-                age.value = '';
-            }
+    function escapeHtml(str) {
+        return (str || '').replace(/[&<>"']/g, m => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+        }[m]));
+    }
+
+    // ── Visual Validation State Rendering ────────────────────────────────────
+    function showFieldError(fieldId, message) {
+        const field = document.getElementById(fieldId);
+        const errContainer = document.getElementById(`${fieldId}Error`);
+        if (field) {
+            field.classList.add('is-invalid');
+            field.classList.remove('is-valid');
+            field.setAttribute('aria-invalid', 'true');
+        }
+        if (errContainer) {
+            const textEl = errContainer.querySelector('.error-text');
+            if (textEl) textEl.textContent = message;
+            errContainer.classList.add('visible');
         }
     }
 
-
-    calculatePasswordStrength(password) {
-        let strength = 0;
-        const checks = {
-            length: password.length >= 8,
-            lowercase: /[a-z]/.test(password),
-            uppercase: /[A-Z]/.test(password),
-            numbers: /\d/.test(password),
-            symbols: /[!@#$%^&*(),.?":{}|<>]/.test(password)
-        };
-
-        strength = Object.values(checks).filter(Boolean).length;
-        return { strength, checks };
+    function markFieldValid(fieldId) {
+        const field = document.getElementById(fieldId);
+        const errContainer = document.getElementById(`${fieldId}Error`);
+        if (field) {
+            field.classList.remove('is-invalid');
+            field.classList.add('is-valid');
+            field.setAttribute('aria-invalid', 'false');
+        }
+        if (errContainer) {
+            errContainer.classList.remove('visible');
+            const textEl = errContainer.querySelector('.error-text');
+            if (textEl) textEl.textContent = '';
+        }
     }
 
-    updatePasswordStrength(strengthData, indicator) {
-        const { strength } = strengthData;
-        indicator.className = 'password-strength';
+    function clearFieldError(fieldId) {
+        const field = document.getElementById(fieldId);
+        const errContainer = document.getElementById(`${fieldId}Error`);
+        if (field) {
+            field.classList.remove('is-invalid');
+            field.classList.remove('is-valid');
+            field.removeAttribute('aria-invalid');
+        }
+        if (errContainer) {
+            errContainer.classList.remove('visible');
+            const textEl = errContainer.querySelector('.error-text');
+            if (textEl) textEl.textContent = '';
+        }
+    }
+
+    // ── Pure Validation Rule Checkers ────────────────────────────────────────
+
+    /**
+     * Name validation rules:
+     * 1. Required: "This field is required."
+     * 2. Leading/trailing space: "Remove spaces at the beginning or end."
+     * 3. Consecutive spaces (/ {2,}/): "Double spaces are not allowed."
+     * 4. Three consecutive identical characters (/(.)\1\1/i): "Three identical characters in a row are not allowed."
+     * 5. Capitalization (/^\p{Lu}/u): "The first letter must be capitalized."
+     * 6. Allowed characters (/^[\p{L}][\p{L}\p{M} '\u2019.-]*$/u): "Please enter valid characters."
+     * 7. Min 2 letters: "Name must contain at least 2 letters."
+     * 8. Max 50 characters: "Name must not exceed 50 characters."
+     */
+    function checkWordCapitalization(val) {
+        const words = val.split(/[\s\-_.'\u2019]+/).filter(Boolean);
+        for (const w of words) {
+            const wLetters = w.match(/\p{L}/gu) || [];
+            if (wLetters.length === 0) continue;
+            if (!/^\p{Lu}/u.test(w)) {
+                return 'The first letter must be capitalized.';
+            }
+            const caps = w.match(/\p{Lu}/gu) || [];
+            if (caps.length > 1) {
+                return 'Each word must contain only 1 capital letter.';
+            }
+        }
+        return null;
+    }
+
+    function getFirstNameError(val, isBlurred = false) {
+        if (!val && !isBlurred) return null;
+        if (val === '' || val.trim() === '') return 'This field is required.';
+        if (val.startsWith(' ') || (isBlurred && val.endsWith(' '))) {
+            return 'Remove spaces at the beginning or end.';
+        }
+        if (/ {2,}/.test(val)) return 'Double spaces are not allowed.';
+        if (/(.)\1\1/i.test(val)) return 'Three identical characters in a row are not allowed.';
+        if (!/^\p{Lu}/u.test(val)) return 'The first letter must be capitalized.';
+        if (!/^[\p{L}][\p{L}\p{M} '\u2019.-]*$/u.test(val)) return 'Please enter valid characters.';
         
-        if (strength <= 2) {
-            indicator.classList.add('strength-weak');
-            indicator.textContent = 'WEAK SECURITY';
-        } else if (strength <= 3) {
-            indicator.classList.add('strength-medium');
-            indicator.textContent = 'MEDIUM SECURITY';
+        const capErr = checkWordCapitalization(val);
+        if (capErr) return capErr;
+        
+        const letters = val.match(/\p{L}/gu) || [];
+        if (letters.length < 2) {
+            if (!isBlurred && val.length < 2) return null;
+            return 'Name must contain at least 2 letters.';
+        }
+        if (Array.from(val).length > 50) return 'Name must not exceed 50 characters.';
+        if (val.endsWith(' ')) return 'Remove spaces at the beginning or end.';
+        return null;
+    }
+
+    function getMiddleNameError(val, isBlurred = false) {
+        if (!val || val.trim() === '') return null; // Optional
+        if (val.startsWith(' ') || (isBlurred && val.endsWith(' '))) {
+            return 'Remove spaces at the beginning or end.';
+        }
+        if (/ {2,}/.test(val)) return 'Double spaces are not allowed.';
+        if (/(.)\1\1/i.test(val)) return 'Three identical characters in a row are not allowed.';
+        if (!/^\p{Lu}/u.test(val)) return 'The first letter must be capitalized.';
+        if (!/^[\p{L}][\p{L}\p{M} '\u2019.-]*$/u.test(val)) return 'Please enter valid characters.';
+
+        const capErr = checkWordCapitalization(val);
+        if (capErr) return capErr;
+
+        if (Array.from(val).length > 50) return 'Name must not exceed 50 characters.';
+        if (val.endsWith(' ')) return 'Remove spaces at the beginning or end.';
+        return null;
+    }
+
+    function getLastNameError(val, isBlurred = false) {
+        return getFirstNameError(val, isBlurred);
+    }
+
+    /**
+     * Location validation rules (Barangay, City, Province, Country):
+     * Same as names, but allows numbers (e.g. Barangay 10).
+     */
+    function getLocationError(val, isBlurred = false) {
+        if (!val && !isBlurred) return null;
+        if (val === '' || val.trim() === '') return 'This field is required.';
+        if (val.startsWith(' ') || (isBlurred && val.endsWith(' '))) {
+            return 'Remove spaces at the beginning or end.';
+        }
+        if (/ {2,}/.test(val)) return 'Double spaces are not allowed.';
+        if (/(.)\1\1/i.test(val)) return 'Three identical characters in a row are not allowed.';
+        if (!/^\p{Lu}/u.test(val)) return 'The first letter must be capitalized.';
+        if (!/^[\p{L}][\p{L}0-9\p{M} '\u2019.-]*$/u.test(val)) return 'Please enter valid characters.';
+
+        const capErr = checkWordCapitalization(val);
+        if (capErr) return capErr;
+
+        const letters = val.match(/\p{L}/gu) || [];
+        if (letters.length < 2) {
+            if (!isBlurred && val.length < 2) return null;
+            return 'Name must contain at least 2 letters.';
+        }
+        if (Array.from(val).length > 50) return 'Name must not exceed 50 characters.';
+        if (val.endsWith(' ')) return 'Remove spaces at the beginning or end.';
+        return null;
+    }
+
+    /**
+     * Street address validation:
+     * Min 2 chars, max 100 chars, no double spaces, no 3 identical chars.
+     */
+    function getStreetError(val, isBlurred = false) {
+        if (!val && !isBlurred) return null;
+        if (val === '' || val.trim() === '') return 'This field is required.';
+        if (val.startsWith(' ') || (isBlurred && val.endsWith(' '))) {
+            return 'Remove spaces at the beginning or end.';
+        }
+        if (/ {2,}/.test(val)) return 'Double spaces are not allowed.';
+        if (/(.)\1\1/i.test(val)) return 'Three identical characters in a row are not allowed.';
+        if (Array.from(val).length < 2) {
+            if (!isBlurred) return null;
+            return 'Address must contain at least 2 characters.';
+        }
+        if (Array.from(val).length > 100) return 'Address must not exceed 100 characters.';
+        if (!/^[\p{L}0-9\p{M} .,\/'#\-]+$/u.test(val)) return 'Please enter valid characters.';
+        if (val.endsWith(' ')) return 'Remove spaces at the beginning or end.';
+        return null;
+    }
+
+    function getZipError(val, isBlurred = false) {
+        if (!val && !isBlurred) return null;
+        if (val === '' || val.trim() === '') return 'This field is required.';
+        if (!/^\d{4}$/.test(val)) {
+            if (!isBlurred && val.length < 4) return null;
+            return 'Zip code must be 4 digits.';
+        }
+        return null;
+    }
+
+    function getSexError(val, isBlurred = false) {
+        if (!val && !isBlurred) return null;
+        if (!val || val.trim() === '') return 'This field is required.';
+        return null;
+    }
+
+    function calculateAge(birthDateStr) {
+        if (!birthDateStr) return null;
+        const birthDate = new Date(birthDateStr);
+        if (isNaN(birthDate.getTime())) return null;
+
+        const today = new Date();
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const m = today.getMonth() - birthDate.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+            age--;
+        }
+        return age;
+    }
+
+    function getBirthDateError(val, isBlurred = false) {
+        if (!val && !isBlurred) return null;
+        if (!val || val.trim() === '') return 'This field is required.';
+        const bDate = new Date(val);
+        if (isNaN(bDate.getTime())) return 'Invalid birthdate format';
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (bDate > today) return 'Birthdate cannot be in the future';
+
+        const age = calculateAge(val);
+        if (age === null || age < 18) return 'Age must be at least 18 years old';
+        return null;
+    }
+
+    function updateAge() {
+        const val = birthDateInput ? birthDateInput.value : '';
+        if (!val) {
+            if (ageInput) ageInput.value = '';
+            return;
+        }
+
+        const bDate = new Date(val);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        if (bDate > today) {
+            if (ageInput) ageInput.value = '';
+            showFieldError('birthDate', 'Birthdate cannot be in the future');
+            return;
+        }
+
+        const computed = calculateAge(val);
+        if (computed !== null && computed >= 0) {
+            if (ageInput) ageInput.value = `${computed} yrs`;
+            if (computed < 18) {
+                showFieldError('birthDate', 'Age must be at least 18 years old');
+                showFieldError('age', 'Age must be at least 18 years old');
+            } else {
+                markFieldValid('birthDate');
+                markFieldValid('age');
+            }
         } else {
-            indicator.classList.add('strength-strong');
-            indicator.textContent = 'STRONG SECURITY';
+            if (ageInput) ageInput.value = '';
         }
     }
 
-    validatePasswordMatch() {
-        const password = document.getElementById('password');
-        const confirmPassword = document.getElementById('confirmPassword');
-        const errorElement = document.getElementById('confirmPasswordError');
-        const successElement = document.getElementById('confirmPasswordSuccess');
-        
-        if (password && confirmPassword && errorElement) {
-            const confirmValue = confirmPassword.value;
-            if (confirmValue && password.value !== confirmValue) {
-                this.showError(confirmPassword, errorElement, 'Passwords do not match');
-                if (successElement) {
-                    successElement.textContent = '';
-                    successElement.classList.remove('show');
-                }
-                confirmPassword.style.borderColor = 'var(--cyber-error)';
-                confirmPassword.style.boxShadow = '0 0 10px rgba(255, 0, 64, 0.3)';
-            } else if (confirmValue && password.value === confirmValue) {
-                this.clearError(confirmPassword);
-                if (successElement) {
-                    successElement.textContent = 'Passwords match';
-                    successElement.classList.add('show');
-                }
-                confirmPassword.style.borderColor = 'var(--cyber-success)';
-                confirmPassword.style.boxShadow = '0 0 10px rgba(0, 255, 0, 0.3)';
-            } else {
-                this.clearError(confirmPassword);
-                if (successElement) {
-                    successElement.textContent = '';
-                    successElement.classList.remove('show');
-                }
-            }
+    /**
+     * Email validation rules:
+     * Valid format, no whitespace, max 254 chars, uniqueness check.
+     */
+    function getEmailFormatError(val, isBlurred = false) {
+        if (!val && !isBlurred) return null;
+        if (val === '' || val.trim() === '') return 'This field is required.';
+        if (/\s/.test(val)) return 'Enter a valid email address.';
+        if (val.length > 254) return 'Enter a valid email address.';
+        const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
+        if (!emailRegex.test(val)) {
+            if (!isBlurred) return null;
+            return 'Enter a valid email address.';
         }
+        return null;
     }
 
-    validateField(field) {
-        const fieldId = field.id;
-        const value = field.value.trim();
-        // Special case: idNumber field uses 'idError' instead of 'idNumberError'
-        const errorElementId = fieldId === 'idNumber' ? 'idError' : (fieldId + 'Error');
-        const errorElement = document.getElementById(errorElementId);
-        
-        if (!errorElement) return;
+    /**
+     * Username validation rules:
+     * 3-20 chars, letters, numbers, dots, underscores, uniqueness check.
+     */
+    function getUsernameFormatError(val, isBlurred = false) {
+        if (!val && !isBlurred) return null;
+        if (val === '' || val.trim() === '') return 'This field is required.';
+        if (/\s/.test(val)) return 'Username does not meet the requirements.';
+        if (val.length > 20) return 'Username does not meet the requirements.';
+        if (!/^[a-zA-Z0-9._]+$/.test(val)) return 'Username does not meet the requirements.';
+        if (val.length < 3) {
+            if (!isBlurred) return null;
+            return 'Username does not meet the requirements.';
+        }
+        return null;
+    }
 
-        let isValid = true;
-        let errorMessage = '';
+    /**
+     * Password validation rules (do NOT trim):
+     * Min 8 chars, max 128 chars, at least one uppercase, one lowercase, one number.
+     */
+    function getPasswordError(val, isBlurred = false) {
+        if (!val && !isBlurred) return null;
+        if (val === '' || val.trim() === '') return 'This field is required.';
+        if (val.length < 8) return 'Password must contain at least 8 characters.';
+        if (val.length > 128) return 'Password must not exceed 128 characters.';
+        if (!/[A-Z]/.test(val)) return 'Include at least one uppercase letter.';
+        if (!/[a-z]/.test(val)) return 'Include at least one lowercase letter.';
+        if (!/[0-9]/.test(val)) return 'Include at least one number.';
+        return null;
+    }
+
+    function getConfirmPasswordError(val, pwdVal, isBlurred = false) {
+        if (!val && !isBlurred) return null;
+        if (val === '' || val.trim() === '') return 'This field is required.';
+        if (val !== pwdVal) return 'Passwords do not match.';
+        return null;
+    }
+
+    function getSecurityQuestionError(val, num, isBlurred = false) {
+        if (!val && !isBlurred) return null;
+        if (!val || val.trim() === '') return `Please select Question ${num}`;
+        return null;
+    }
+
+    function getSecurityAnswerError(val, qVal, isBlurred = false) {
+        if (!qVal) return null;
+        if (!val && !isBlurred) return null;
+        if (!val || val.trim() === '') return 'This field is required.';
+        return null;
+    }
+
+    // ── Debounced Uniqueness Checkers ────────────────────────────────────────
+    let emailCheckTimeout = null;
+    let usernameCheckTimeout = null;
+
+    function checkEmailUniqueness(emailVal) {
+        clearTimeout(emailCheckTimeout);
+        emailCheckTimeout = setTimeout(() => {
+            fetch('../php/check_email.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: emailVal })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (emailInput.value.trim().toLowerCase() !== emailVal.toLowerCase()) return;
+                fieldStates.email.lastCheckedValue = emailVal.toLowerCase();
+                const isTaken = (data && data.exists === true) || (data && data.data && data.data.exists === true);
+                if (isTaken) {
+                    fieldStates.email.isDuplicate = true;
+                    showFieldError('email', 'This email address is already registered.');
+                } else {
+                    fieldStates.email.isDuplicate = false;
+                    if (!getEmailFormatError(emailInput.value, true)) {
+                        markFieldValid('email');
+                    }
+                }
+            })
+            .catch(() => {});
+        }, 350);
+    }
+
+    function checkUsernameUniqueness(usernameVal) {
+        clearTimeout(usernameCheckTimeout);
+        usernameCheckTimeout = setTimeout(() => {
+            fetch('../php/check_username.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: usernameVal })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (usernameInput.value.trim().toLowerCase() !== usernameVal.toLowerCase()) return;
+                fieldStates.username.lastCheckedValue = usernameVal.toLowerCase();
+                const isTaken = (data && data.exists === true) || (data && data.data && data.data.exists === true);
+                if (isTaken) {
+                    fieldStates.username.isDuplicate = true;
+                    showFieldError('username', 'This username is already taken.');
+                } else {
+                    fieldStates.username.isDuplicate = false;
+                    if (!getUsernameFormatError(usernameInput.value, true)) {
+                        markFieldValid('username');
+                    }
+                }
+            })
+            .catch(() => {});
+        }, 350);
+    }
+
+    // ── Field Validation Dispatcher ──────────────────────────────────────────
+    function validateField(fieldId, isBlurred = false) {
+        const state = fieldStates[fieldId];
+        if (!state) return true;
+
+        if (isBlurred) {
+            state.wasBlurred = true;
+            state.touched = true;
+        }
+
+        const field = document.getElementById(fieldId);
+        if (!field) return true;
+
+        if (field.disabled) {
+            clearFieldError(fieldId);
+            return true;
+        }
+
+        const val = field.value;
+        let err = null;
 
         switch (fieldId) {
-            case 'idNumber':
-                if (!value) {
-                    errorMessage = 'ID Number is required';
-                    isValid = false;
-                } else if (!/^\d{4}-\d{4}$/.test(value)) {
-                    errorMessage = 'Invalid ID format (XXXX-XXXX)';
-                    isValid = false;
-                }
-                break;
-                
             case 'firstName':
+                err = getFirstNameError(val, state.wasBlurred || isBlurred);
+                break;
+            case 'middleInitial':
+                err = getMiddleNameError(val, state.wasBlurred || isBlurred);
+                break;
             case 'lastName':
-            case 'middleName':
-                return this.validateNameInput(field, { isOptional: fieldId === 'middleName' });
-            
-            case 'extension':
-                // Extension is optional; if provided, it must match allowed list
-                if (value) {
-                    if (/[^a-zA-Z]/.test(value)) {
-                        errorMessage = 'Extension allows letters only';
-                        isValid = false;
-                    } else if (value.length > 3) {
-                        errorMessage = 'Extension allows up to 3 letters';
-                        isValid = false;
-                    } else if (!isValidExtensionValue(value)) {
-                        errorMessage = `Extension must be one of: ${EXTENSION_DISPLAY_LIST}`;
-                        isValid = false;
-                    } else {
-                        // Check capitalization - Jr and Sr must be capitalized
-                        const expectedFormat = formatExtensionValue(value);
-                        if (value.toLowerCase() === 'jr' || value.toLowerCase() === 'sr') {
-                            if (value !== expectedFormat) {
-                                errorMessage = `Extension must be "${expectedFormat}" (not "${value}")`;
-                                isValid = false;
-                            }
-                        } else if (this.hasConsecutiveLetters(value.toLowerCase()) && value.toLowerCase() !== 'iii') {
-                            errorMessage = 'Cannot contain 3 consecutive letters';
-                            isValid = false;
-                        }
-                    }
-                }
+                err = getLastNameError(val, state.wasBlurred || isBlurred);
                 break;
-                
-            case 'phoneNumber':
-                if (!value) {
-                    errorMessage = 'Phone number is required';
-                    isValid = false;
-                } else {
-                    // Check for letters first
-                    if (/[a-zA-Z]/.test(value)) {
-                        errorMessage = 'Phone number cannot contain letters';
-                    isValid = false;
-                } else {
-                    const digitsOnly = value.replace(/\D/g, '');
-                    if (!/^09\d{9}$/.test(digitsOnly)) {
-                        errorMessage = 'Phone number must start with 09 and be 11 digits';
-                        isValid = false;
-                        }
-                    }
-                }
-                break;
-                
-            case 'email':
-                if (!value) {
-                    errorMessage = 'Email is required';
-                    isValid = false;
-                } else {
-                    // Check for warnings first
-                    const warningMsg = this.getEmailWarning(value);
-                    if (warningMsg) {
-                        // Warning found, but don't block submission
-                        // The blur event will show the warning
-                    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())) {
-                        errorMessage = 'Invalid email format';
-                        isValid = false;
-                    }
-                }
-                break;
-                
-            case 'username':
-                if (!value) {
-                    errorMessage = 'Username is required';
-                    isValid = false;
-                } else {
-                    const usernameError = this.getUsernameError(value);
-                    if (usernameError) {
-                        errorMessage = usernameError;
-                        isValid = false;
-                    }
-                }
-                break;
-                
-            case 'password':
-                if (!value) {
-                    errorMessage = 'Password is required';
-                    isValid = false;
-                } else if (value.length < 8) {
-                    errorMessage = 'Password must be at least 8 characters';
-                    isValid = false;
-                } else if (!/[a-z]/.test(value)) {
-                    errorMessage = 'Password must include a lowercase letter';
-                    isValid = false;
-                } else if (!/[A-Z]/.test(value)) {
-                    errorMessage = 'Password must include an uppercase letter';
-                    isValid = false;
-                } else if (!/\d/.test(value)) {
-                    errorMessage = 'Password must include a number';
-                    isValid = false;
-                }
-                break;
-                
-            case 'confirmPassword':
-                if (!value) {
-                    errorMessage = 'Please re-enter your password';
-                    isValid = false;
-                }
-                break;
-                
-            case 'age':
-                if (!value) {
-                    errorMessage = 'Age is required';
-                    isValid = false;
-                } else if (value < 1 || value > 120) {
-                    errorMessage = 'Age must be between 1 and 120';
-                    isValid = false;
-                }
-                break;
-                
             case 'sex':
-                if (!value) {
-                    errorMessage = 'Please select your sex';
-                    isValid = false;
-                }
+                err = getSexError(val, state.wasBlurred || isBlurred);
                 break;
-                
             case 'birthDate':
-                if (!value) {
-                    errorMessage = 'Birth date is required';
-                    isValid = false;
-                } else {
-                    const birthDate = new Date(value);
-                    const today = new Date();
-                    if (birthDate > today) {
-                        errorMessage = 'Birth date cannot be in the future';
-                        isValid = false;
-                    }
-                }
+                err = getBirthDateError(val, state.wasBlurred || isBlurred);
                 break;
-                
-            case 'purok':
-                if (!value) {
-                    errorMessage = 'This field is required';
-                    isValid = false;
-                } else if (/[^a-zA-Z0-9\s\-'\.\,]/.test(value)) {
-                    errorMessage = 'Invalid characters';
-                    isValid = false;
-                } else if (this.hasConsecutiveLetters(value.toLowerCase())) {
-                    errorMessage = 'Cannot contain 3 consecutive letters';
-                    isValid = false;
-                }
-                // Note: Purok CAN start with a number (unlike other address fields)
+            case 'purokStreet':
+                err = getStreetError(val, state.wasBlurred || isBlurred);
                 break;
-                
             case 'barangay':
             case 'city':
             case 'province':
-                if (!value) {
-                    errorMessage = 'This field is required';
-                    isValid = false;
-                } else if (/^\d/.test(value.trim())) {
-                    errorMessage = 'Cannot start with a number';
-                    isValid = false;
-                } else if (/[^a-zA-Z0-9\s\-'\.\,]/.test(value)) {
-                    errorMessage = 'Invalid characters';
-                    isValid = false;
-                } else if (this.hasConsecutiveLetters(value.toLowerCase())) {
-                    errorMessage = 'Cannot contain 3 consecutive letters';
-                    isValid = false;
-                }
-                break;
-                
             case 'country':
-                if (!value) {
-                    errorMessage = 'This field is required';
-                    isValid = false;
-                }
+                err = getLocationError(val, state.wasBlurred || isBlurred);
                 break;
-                
             case 'zipCode':
-                if (!value) {
-                    errorMessage = 'Zip code is required';
-                    isValid = false;
-                } else if (!/^\d{4}$/.test(value)) {
-                    errorMessage = 'Invalid zip code format';
-                    isValid = false;
+                err = getZipError(val, state.wasBlurred || isBlurred);
+                break;
+            case 'email':
+                err = getEmailFormatError(val, state.wasBlurred || isBlurred);
+                if (!err && val.trim() !== '') {
+                    if (state.isDuplicate) {
+                        err = 'This email address is already registered.';
+                    } else {
+                        checkEmailUniqueness(val.trim());
+                    }
                 }
+                break;
+            case 'username':
+                err = getUsernameFormatError(val, state.wasBlurred || isBlurred);
+                if (!err && val.trim() !== '') {
+                    if (state.isDuplicate) {
+                        err = 'This username is already taken.';
+                    } else {
+                        checkUsernameUniqueness(val.trim());
+                    }
+                }
+                break;
+            case 'password':
+                err = getPasswordError(val, state.wasBlurred || isBlurred);
+                break;
+            case 'confirmPassword':
+                err = getConfirmPasswordError(val, passwordInput ? passwordInput.value : '', state.wasBlurred || isBlurred);
+                break;
+            case 'q1':
+                err = getSecurityQuestionError(val, 1, state.wasBlurred || isBlurred);
+                break;
+            case 'a1':
+                err = getSecurityAnswerError(val, q1Select ? q1Select.value : '', state.wasBlurred || isBlurred);
+                break;
+            case 'q2':
+                err = getSecurityQuestionError(val, 2, state.wasBlurred || isBlurred);
+                break;
+            case 'a2':
+                err = getSecurityAnswerError(val, q2Select ? q2Select.value : '', state.wasBlurred || isBlurred);
+                break;
+            case 'q3':
+                err = getSecurityQuestionError(val, 3, state.wasBlurred || isBlurred);
+                if (!err && q1Select && q2Select && q3Select) {
+                    if (q1Select.value && q2Select.value && q3Select.value) {
+                        if (new Set([q1Select.value, q2Select.value, q3Select.value]).size < 3) {
+                            err = 'All 3 security questions must be unique';
+                        }
+                    }
+                }
+                break;
+            case 'a3':
+                err = getSecurityAnswerError(val, q3Select ? q3Select.value : '', state.wasBlurred || isBlurred);
                 break;
         }
 
-        if (!isValid) {
-            this.showError(field, errorElement, errorMessage);
+        if (err) {
+            state.lastError = err;
+            showFieldError(fieldId, err);
+            return false;
         } else {
-            this.clearError(field);
+            state.lastError = null;
+            if (val !== '' || fieldId === 'middleInitial') {
+                markFieldValid(fieldId);
+            } else {
+                clearFieldError(fieldId);
+            }
+            return true;
         }
-
-        return isValid;
     }
 
-    validateNameInput(field, options = {}) {
-        const { isOptional = false } = options;
-        const raw = field.value || '';
-        const trimmed = raw.trim();
-        const errorElement = document.getElementById(field.id + 'Error');
+    // ── Bind Real-Time Listeners to All Fields ───────────────────────────────
+    Object.keys(fieldStates).forEach(fieldId => {
+        const el = document.getElementById(fieldId);
+        if (!el) return;
 
-        if (!errorElement) {
-            return true;
-        }
-
-        const showIssue = (type, message) => {
-            if (type === 'warning') {
-                this.showWarning(field, errorElement, message);
-            } else {
-                this.showError(field, errorElement, message);
-            }
-        };
-
-        if (!trimmed) {
-            if (isOptional) {
-                this.clearError(field);
-                return true;
-            }
-            // Show field-specific required message
-            const fieldName = field.id === 'firstName' ? 'First name' : 
-                            field.id === 'lastName' ? 'Last name' : 
-                            field.id === 'middleName' ? 'Middle name' : 'This field';
-            showIssue('error', `${fieldName} is Required`);
-            return false;
-        }
-
-        if (/\d/.test(raw)) {
-            showIssue('error', 'Numbers not allowed');
-            return false;
-        }
-
-        // Title case check (ignoring invalid characters so we can surface casing issues before other errors)
-        const caseSafeValue = trimmed.replace(/[^a-zA-Z\s\-'\.]/g, ' ').replace(/\s+/g, ' ').trim();
-        if (caseSafeValue) {
-            const titleWarning = this.getTitleCaseWarning(caseSafeValue);
-            if (titleWarning) {
-                showIssue('warning', titleWarning);
-                return true;
-            }
-        }
-
-        const invalidChars = raw.match(/[^a-zA-Z\s\-'\.]/g);
-        if (invalidChars) {
-            const uniqueChars = [...new Set(invalidChars)];
-            showIssue('error', `Invalid chars: ${uniqueChars.join(', ')}`);
-            return false;
-        }
-
-        if (!isOptional && raw.length < 2) {
-            showIssue('error', 'Min 2 letters');
-            return false;
-        }
-
-        if (this.hasConsecutiveLetters(raw.toLowerCase())) {
-            showIssue('error', 'No 3+ repeats');
-            return false;
-        }
-
-        if (raw !== trimmed) {
-            showIssue('warning', 'Trim spaces');
-            return true;
-        }
-
-        if (/\s{2,}/.test(raw)) {
-            showIssue('warning', 'Single spaces only');
-            return true;
-        }
-
-        const titleWarning = this.getTitleCaseWarning(trimmed);
-        if (titleWarning) {
-            showIssue('warning', titleWarning);
-            return true;
-        }
-
-        this.clearError(field);
-        return true;
-    }
-
-    validateAddressInput(field, options = {}) {
-        const {
-            isOptional = false,
-            allowLeadingNumbers = false,
-            allowedPattern = /[^a-zA-Z0-9\s\-'\.,]/g,
-            invalidMessage = 'Invalid chars',
-            requireTitleCase = true,
-            label = 'This field'
-        } = options;
-
-        const raw = field.value || '';
-        const trimmed = raw.trim();
-        const errorElement = document.getElementById(field.id + 'Error');
-
-        if (!errorElement) {
-            return true;
-        }
-
-        const showIssue = (type, message) => {
-            if (type === 'warning') {
-                this.showWarning(field, errorElement, message);
-            } else {
-                this.showError(field, errorElement, message);
-            }
-        };
-
-        if (!trimmed) {
-            if (isOptional) {
-                this.clearError(field);
-                return true;
-            }
-            showIssue('error', `${label} is Required`);
-            return false;
-        }
-
-        if (raw !== trimmed) {
-            showIssue('warning', 'Trim spaces');
-            return true;
-        }
-
-        if (/\s{2,}/.test(raw)) {
-            showIssue('warning', 'Single spaces only');
-            return true;
-        }
-
-        if (!allowLeadingNumbers && /^\d/.test(trimmed)) {
-            showIssue('error', 'Cannot start with number');
-            return false;
-        }
-
-        if (requireTitleCase) {
-            const caseSafeValue = trimmed.replace(/[^a-zA-Z\s\-'\.,]/g, ' ').replace(/\s+/g, ' ').trim();
-            if (caseSafeValue) {
-                const titleWarning = this.getTitleCaseWarning(caseSafeValue);
-                if (titleWarning) {
-                    showIssue('warning', titleWarning);
-                    return true;
+        el.addEventListener('input', () => {
+            fieldStates[fieldId].touched = true;
+            // Clear duplicate flag only if the value actually changed from the flagged duplicate
+            if (fieldId === 'email' || fieldId === 'username') {
+                if (fieldStates[fieldId].lastCheckedValue !== el.value.trim().toLowerCase()) {
+                    fieldStates[fieldId].isDuplicate = false;
                 }
             }
-        }
+            validateField(fieldId, false);
 
-        const invalidChars = raw.match(allowedPattern);
-        if (invalidChars) {
-            const uniqueChars = [...new Set(invalidChars)];
-            const firstChar = uniqueChars[0];
-            const extraCount = uniqueChars.length - 1;
-            const extraText = extraCount > 0 ? ` (+${extraCount} more)` : '';
-            showIssue('error', `${invalidMessage}: "${firstChar}"${extraText}.`);
-            return false;
-        }
-
-        if (this.hasConsecutiveLetters(trimmed.toLowerCase())) {
-            showIssue('error', 'No 3+ repeats');
-            return false;
-        }
-
-        this.clearError(field);
-        return true;
-    }
-
-    updateBodyScrollState() {
-        const body = document.body;
-        const formPanel = document.querySelector('.form-panel');
-        if (!body || !formPanel) return;
-        const headerHeight = document.querySelector('.cyber-header')?.offsetHeight || 0;
-        const footerHeight = document.querySelector('.cyber-footer')?.offsetHeight || 0;
-        const buffer = 80;
-        const totalHeight = formPanel.offsetHeight + headerHeight + footerHeight + buffer;
-        const needsScroll = totalHeight > window.innerHeight;
-        body.classList.toggle('scroll-active', needsScroll);
-    }
-
-    showError(field, errorElement, message) {
-        field.style.borderColor = 'var(--cyber-error)';
-        field.style.boxShadow = '0 0 10px rgba(255, 0, 64, 0.3)';
-        errorElement.textContent = message;
-        errorElement.classList.add('show');
-    }
-
-    showWarning(field, errorElement, message) {
-        field.style.borderColor = 'var(--cyber-error)';
-        field.style.boxShadow = '0 0 10px rgba(255, 0, 64, 0.3)';
-        errorElement.textContent = message;
-        errorElement.classList.add('show');
-        errorElement.style.color = 'var(--cyber-error)';
-    }
-
-    clearError(field) {
-        const errorElement = document.getElementById(field.id + 'Error');
-        if (errorElement) {
-            field.style.borderColor = '';
-            field.style.boxShadow = '';
-            field.classList.remove('error-field');
-            errorElement.textContent = '';
-            errorElement.classList.remove('show');
-            errorElement.style.color = '';
-        }
-    }
-
-    validateForm() {
-        // Get all required fields
-        const requiredFields = [
-            'idNumber', 'lastName', 'firstName', 'middleName', 'birthDate', 'age', 'sex',
-            'phoneNumber', 'email', 'username', 'password', 'confirmPassword',
-            'country', 'province', 'city', 'barangay', 'purok', 'zipCode'
-        ];
-        
-        let isValid = true;
-
-        // Validate each required field
-        requiredFields.forEach(fieldId => {
-            const field = document.getElementById(fieldId);
-            if (field) {
-                // For fields with blur validation (name fields, extension, address fields), trigger their validation
-                if (['firstName', 'lastName', 'middleName'].includes(fieldId)) {
-                    if (!this.validateNameInput(field, { isOptional: fieldId === 'middleName' })) {
-                        isValid = false;
-                    }
-                } else if (fieldId === 'extension') {
-                    const result = this.validateCapitalization(field, true);
-                    const errorElement = document.getElementById(fieldId + 'Error');
-                    if (!result.ok) {
-                        if (errorElement) {
-                            this.showError(field, errorElement, result.message || 'Invalid format');
-                        }
-                        isValid = false;
-                    } else if (result.warning) {
-                        if (errorElement) {
-                            this.showWarning(field, errorElement, result.message || 'Invalid format');
-                        }
-                    } else {
-                        this.clearError(field);
-                    }
-                } else if (['barangay', 'city', 'province'].includes(fieldId)) {
-                    // Set user-friendly labels
-                    const fieldLabels = {
-                        'province': 'Province',
-                        'city': 'City',
-                        'barangay': 'Barangay'
-                    };
-                    const options = {
-                        label: fieldLabels[fieldId] || fieldId.charAt(0).toUpperCase() + fieldId.slice(1),
-                        allowLeadingNumbers: false,
-                        allowedPattern: /[^a-zA-Z0-9\s\-'\.,]/g,
-                        invalidMessage: 'Invalid char',
-                        allowedDescription: "letters, numbers, spaces, hyphen (-), apostrophe ('), period (.), comma (,)",
-                        requireTitleCase: true
-                    };
-                    if (!this.validateAddressInput(field, options)) {
-                        isValid = false;
-                    }
-                } else if (fieldId === 'purok') {
-                    const options = {
-                        label: 'Purok/Street',
-                        allowLeadingNumbers: true,
-                        allowedPattern: /[^A-Za-z0-9\s\-]/g,
-                        invalidMessage: 'Invalid char',
-                        allowedDescription: 'letters, numbers, spaces, hyphen (-)',
-                        requireTitleCase: true
-                    };
-                    if (!this.validateAddressInput(field, options)) {
-                        isValid = false;
-                    }
-                } else if (fieldId === 'username') {
-                    // Trigger username validation
-                    const value = field.value;
-                    const errorElement = document.getElementById('usernameError');
-                    if (value) {
-                        const warningMsg = this.getUsernameWarning(value);
-                        if (warningMsg) {
-                            if (errorElement) {
-                                this.showWarning(field, errorElement, warningMsg);
-                            }
-                        } else {
-                            const errorMsg = this.getUsernameError(value);
-                            if (errorMsg) {
-                                if (errorElement) {
-                                    errorElement.textContent = errorMsg;
-                                    errorElement.classList.add('show');
-                                }
-                                field.style.borderColor = 'var(--cyber-error)';
-                                field.style.boxShadow = '0 0 10px rgba(255, 0, 64, 0.3)';
-                                isValid = false;
-                            } else {
-                                this.clearError(field);
-                            }
-                        }
-                    } else {
-                        if (errorElement) {
-                            errorElement.textContent = 'Username is required';
-                            errorElement.classList.add('show');
-                        }
-                        field.style.borderColor = 'var(--cyber-error)';
-                        field.style.boxShadow = '0 0 10px rgba(255, 0, 64, 0.3)';
-                        isValid = false;
-                    }
-                } else if (fieldId === 'email') {
-                    // Trigger email validation
-                    const value = field.value;
-                    const errorElement = document.getElementById('emailError');
-                    if (value) {
-                        const warningMsg = this.getEmailWarning(value);
-                        if (warningMsg) {
-                            if (errorElement) {
-                                this.showWarning(field, errorElement, warningMsg);
-                            }
-                        } else if (!this.isValidEmail(value.trim())) {
-                            if (errorElement) {
-                                errorElement.textContent = 'Invalid email format';
-                                errorElement.classList.add('show');
-                            }
-                            field.style.borderColor = 'var(--cyber-error)';
-                            field.style.boxShadow = '0 0 10px rgba(255, 0, 64, 0.3)';
-                            isValid = false;
-                        } else {
-                            this.clearError(field);
-                        }
-                    } else {
-                        if (errorElement) {
-                            errorElement.textContent = 'Email is required';
-                            errorElement.classList.add('show');
-                        }
-                        field.style.borderColor = 'var(--cyber-error)';
-                        field.style.boxShadow = '0 0 10px rgba(255, 0, 64, 0.3)';
-                        isValid = false;
-                    }
-                } else if (fieldId === 'confirmPassword') {
-                    // Validate confirmPassword separately to show blank error
-                    const value = field.value;
-                    const errorElement = document.getElementById('confirmPasswordError');
-                    if (!value) {
-                        if (errorElement) {
-                            errorElement.textContent = 'Please re-enter your password';
-                            errorElement.classList.add('show');
-                        }
-                        field.style.borderColor = 'var(--cyber-error)';
-                        field.style.boxShadow = '0 0 10px rgba(255, 0, 64, 0.3)';
-                        isValid = false;
-                    } else {
-                        // Then check password match
-                        this.validatePasswordMatch();
-                    }
-                } else {
-                    // Use standard validateField for other fields (including idNumber)
-                    if (!this.validateField(field)) {
-                        isValid = false;
-                    }
-                }
+            // Cross-field revalidation
+            if (fieldId === 'password' && confirmPasswordInput && confirmPasswordInput.value) {
+                validateField('confirmPassword', false);
             }
         });
 
-        // Validate password match (if confirmPassword has value)
-        const confirmPassword = document.getElementById('confirmPassword');
-        if (confirmPassword && confirmPassword.value) {
-            this.validatePasswordMatch();
-        }
+        el.addEventListener('blur', () => {
+            fieldStates[fieldId].touched = true;
+            fieldStates[fieldId].wasBlurred = true;
+            validateField(fieldId, true);
+        });
 
-        return isValid;
+        el.addEventListener('change', () => {
+            fieldStates[fieldId].touched = true;
+            validateField(fieldId, true);
+        });
+    });
+
+    // Zip code input: allow only digits up to 4
+    if (zipCodeInput) {
+        zipCodeInput.addEventListener('input', (e) => {
+            e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4);
+        });
     }
 
-    getEmailWarning(value) {
-        if (!value) return null;
-        
-        // Priority 1: Check for spaces
-        if (/\s/.test(value)) {
-            return 'Warning: Email cannot contain spaces';
-        }
-        
-        // Priority 2: Check for invalid characters (excluding @ which is required)
-        // Invalid: ! # $ % ^ & * = { } [ ] / \ | : ; " ' < > , ?
-        const invalidChars = value.match(/[!#$%^&*={}\[\]\/\\|:;"'<>,?]/g);
-        if (invalidChars) {
-            const uniqueChars = [...new Set(invalidChars)];
-            return `Warning: Invalid characters: ${uniqueChars.join(', ')}`;
-        }
-        
-        return null;
+    // BirthDate input: auto-update age
+    if (birthDateInput) {
+        birthDateInput.addEventListener('input', updateAge);
+        birthDateInput.addEventListener('change', updateAge);
     }
 
-    isValidEmail(value) {
-        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-    }
+    // ── Password Visibility Toggles ──────────────────────────────────────────
+    document.querySelectorAll('.pwd-eye-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const targetId = btn.getAttribute('data-target');
+            const targetInput = document.getElementById(targetId);
+            if (!targetInput) return;
 
-    isAllUppercaseEmail(value) {
-        const letters = value.replace(/[^a-zA-Z]/g, '');
-        if (!letters) return false;
-        return letters === letters.toUpperCase() && letters !== letters.toLowerCase();
-    }
+            const isPassword = targetInput.type === 'password';
+            targetInput.type = isPassword ? 'text' : 'password';
 
-    isValidLocalPartCase(value) {
-        const atIndex = value.indexOf('@');
-        if (atIndex <= 0) return true;
-        const local = value.slice(0, atIndex);
-        const letters = local.replace(/[^a-zA-Z]/g, '');
-        if (!letters) return true;
-        const first = letters.charAt(0);
-        const rest = letters.slice(1);
-        const allLower = letters === letters.toLowerCase();
-        const firstUpperRestLower = /^[A-Z]$/.test(first) && rest === rest.toLowerCase();
-        return allLower || firstUpperRestLower;
-    }
-
-    isValidDomainCase(value) {
-        const atIndex = value.indexOf('@');
-        if (atIndex <= 0) return true;
-        const domain = value.slice(atIndex + 1);
-        const letters = domain.replace(/[^a-zA-Z]/g, '');
-        if (!letters) return true;
-        // Domain should be all lowercase
-        return letters === letters.toLowerCase();
-    }
-
-    isProperTitleCase(str) {
-        if (typeof str !== 'string' || !str.trim()) return true;
-        // Expected Title Case: First letter of each word is uppercase, rest is lowercase
-        // Allow hyphens, apostrophes, and periods
-        const words = str.split(/\s+/);
-        for (let word of words) {
-            if (!word) continue;
-            
-            // Skip words that are purely numeric (numbers don't need capitalization)
-            if (/^\d+$/.test(word)) {
-                continue;
-            }
-            
-            // Skip words that don't contain any letters
-            if (!/[a-zA-Z]/.test(word)) {
-                continue;
-            }
-            
-            // Split by hyphens, apostrophes, and periods to check each part
-            const parts = word.split(/([-'.])/);
-            for (let i = 0; i < parts.length; i++) {
-                const part = parts[i];
-                if (!part || /^[-'.]$/.test(part)) continue; // Skip separators
-                
-                // Skip purely numeric parts
-                if (/^\d+$/.test(part)) {
-                    continue;
-                }
-                
-                // Skip parts without letters
-                if (!/[a-zA-Z]/.test(part)) {
-                    continue;
-                }
-                
-                // Check if first letter is uppercase and rest is lowercase
-                if (part.length > 0) {
-                    const first = part.charAt(0);
-                    const rest = part.slice(1);
-                    if (!/^[A-Z]$/.test(first) || rest !== rest.toLowerCase()) {
-                        return false;
-                    }
-                }
-            }
-        }
-        return true;
-    }
-
-    getTitleCaseWarning(str) {
-        if (typeof str !== 'string' || !str.trim()) return null;
-        const words = str.split(/\s+/).filter(w => w.trim());
-        const issues = [];
-        const correctedExamples = [];
-        
-        words.forEach((word, index) => {
-            if (!word) return;
-            
-            // Skip words that are purely numeric (numbers don't need capitalization)
-            if (/^\d+$/.test(word)) {
-                return;
-            }
-            
-            // Skip words that don't contain any letters (only numbers and special chars)
-            if (!/[a-zA-Z]/.test(word)) {
-                return;
-            }
-            
-            const parts = word.split(/([-'.])/);
-            let hasIssue = false;
-            
-            for (let i = 0; i < parts.length; i++) {
-                const part = parts[i];
-                if (!part || /^[-'.]$/.test(part)) continue;
-                
-                // Skip purely numeric parts
-                if (/^\d+$/.test(part)) {
-                    continue;
-                }
-                
-                // Skip parts without letters
-                if (!/[a-zA-Z]/.test(part)) {
-                    continue;
-                }
-                
-                if (part.length > 0) {
-                    const first = part.charAt(0);
-                    const rest = part.slice(1);
-                    
-                    if (!/^[A-Z]$/.test(first)) {
-                        hasIssue = true;
-                        break;
-                    }
-                    if (rest !== rest.toLowerCase()) {
-                        hasIssue = true;
-                        break;
-                    }
-                }
-            }
-            
-            if (hasIssue) {
-                // Create corrected version of the word, preserving numbers and special chars
-                // Capitalize first letter of each letter sequence, keep numbers as-is
-                const correctedWord = word.replace(/\b[a-z]+/gi, (match) => {
-                    return match.charAt(0).toUpperCase() + match.slice(1).toLowerCase();
-                });
-                issues.push(`"${word}"`);
-                correctedExamples.push(correctedWord);
+            if (isPassword) {
+                btn.innerHTML = `
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                        <line x1="1" y1="1" x2="23" y2="23"></line>
+                    </svg>
+                `;
+            } else {
+                btn.innerHTML = `
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                `;
             }
         });
-        
-        if (issues.length === 0) return null;
-        
-        if (issues.length === 1) {
-            return `Warning: Should be uppercase "${correctedExamples[0]}"`;
+    });
+
+    // ── Password Strength Evaluation ─────────────────────────────────────────
+    function evaluatePassword(pwd) {
+        if (!pwd) return { score: 0, label: '', valid: false };
+
+        const hasLen = pwd.length >= 8 && pwd.length <= 128;
+        const hasUpper = /[A-Z]/.test(pwd);
+        const hasLower = /[a-z]/.test(pwd);
+        const hasNum = /[0-9]/.test(pwd);
+        const hasSym = /[^A-Za-z0-9]/.test(pwd);
+
+        let criteriaMet = 0;
+        if (hasLen) criteriaMet++;
+        if (hasUpper) criteriaMet++;
+        if (hasLower) criteriaMet++;
+        if (hasNum) criteriaMet++;
+        if (hasSym) criteriaMet++;
+
+        const fullyCompliant = hasLen && hasUpper && hasLower && hasNum;
+
+        let score = 1;
+        let label = 'Weak';
+        if (criteriaMet >= 5) {
+            score = 4;
+            label = 'Strong';
+        } else if (criteriaMet === 4) {
+            score = 3;
+            label = 'Good';
+        } else if (criteriaMet === 3) {
+            score = 2;
+            label = 'Fair';
         } else {
-            const correctedExample = correctedExamples.join(' ');
-            return `Warning: Should be uppercase "${correctedExample}"`;
+            score = 1;
+            label = 'Weak';
         }
+
+        return { score, label, valid: fullyCompliant };
     }
 
-    hasConsecutiveChars(str) {
-        // Check for 3 consecutive letters (abc, bcd, etc.)
-        for (let i = 0; i < str.length - 2; i++) {
-            const char1 = str.charCodeAt(i);
-            const char2 = str.charCodeAt(i + 1);
-            const char3 = str.charCodeAt(i + 2);
-            
-            // Check if all three are letters and consecutive
-            if (char1 >= 97 && char1 <= 122 && // a-z
-                char2 >= 97 && char2 <= 122 &&
-                char3 >= 97 && char3 <= 122 &&
-                char2 === char1 + 1 &&
-                char3 === char2 + 1) {
-                return true;
-            }
-            
-            // Check if all three are numbers and consecutive
-            if (char1 >= 48 && char1 <= 57 && // 0-9
-                char2 >= 48 && char2 <= 57 &&
-                char3 >= 48 && char3 <= 57 &&
-                char2 === char1 + 1 &&
-                char3 === char2 + 1) {
-                return true;
-            }
-        }
-        return false;
-    }
+    function updateStrengthMeter() {
+        const val = passwordInput.value;
+        const segments = [strSeg1, strSeg2, strSeg3, strSeg4];
+        segments.forEach(seg => {
+            if (seg) seg.className = 'strength-segment';
+        });
 
-    hasConsecutiveLetters(str) {
-        // Check for 3 consecutive letters (abc, bcd, etc.) or 3 identical letters (aaa, ddd, etc.)
-        for (let i = 0; i < str.length - 2; i++) {
-            const char1 = str.charCodeAt(i);
-            const char2 = str.charCodeAt(i + 1);
-            const char3 = str.charCodeAt(i + 2);
-            
-            // Check if all three are letters
-            if (char1 >= 97 && char1 <= 122 && // a-z
-                char2 >= 97 && char2 <= 122 &&
-                char3 >= 97 && char3 <= 122) {
-                
-                // Check for 3 identical consecutive letters (aaa, ddd, etc.)
-                if (char1 === char2 && char2 === char3) {
-                    return true;
-                }
-                
-                // Check for 3 consecutive letters in sequence (abc, bcd, etc.)
-                if (char2 === char1 + 1 && char3 === char2 + 1) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    getUsernameWarning(value) {
-        if (!value) return null;
-        
-        // No warnings for username - all issues are errors
-        // Uppercase and format issues are handled in getUsernameError()
-        return null;
-    }
-
-    getUsernameError(value) {
-        if (!value) {
-            return 'Username is required';
-        }
-
-        // Format must be: lowercase letters, dot, numbers (e.g., "john.1")
-        // Pattern: ^[a-z]+\.[0-9]+$
-        
-        // Check for uppercase letters (show as error, but allow input)
-        if (/[A-Z]/.test(value)) {
-            const uppercaseChars = value.match(/[A-Z]/g);
-            if (uppercaseChars) {
-                const uniqueChars = [...new Set(uppercaseChars)];
-                return `Uppercase letters not allowed: ${uniqueChars.join(', ')}. Format must be "lowercase.#" (e.g., john.1)`;
-            }
-        }
-
-        // Check if format matches "lowercase.#" pattern
-        if (!/^[a-z]+\.[0-9]+$/.test(value)) {
-            // Provide specific error messages based on what's wrong
-            if (!/^[a-z]/.test(value)) {
-                if (/^[0-9]/.test(value)) {
-                    return 'Username must start with lowercase letters, not numbers. Format: "lowercase.#" (e.g., john.1)';
-                }
-                if (/^[A-Z]/.test(value)) {
-                    return 'Username must start with lowercase letters. Format: "lowercase.#" (e.g., john.1)';
-                }
-                return 'Username must start with lowercase letters. Format: "lowercase.#" (e.g., john.1)';
-            }
-            
-            if (!/\./.test(value)) {
-                return 'Username must contain a dot (.) between letters and numbers. Format: "lowercase.#" (e.g., john.1)';
-            }
-            
-            // Check if dot is in wrong position
-            const dotIndex = value.indexOf('.');
-            if (dotIndex === 0) {
-                return 'Username cannot start with a dot. Format: "lowercase.#" (e.g., john.1)';
-            }
-            if (dotIndex === value.length - 1) {
-                return 'Username must have numbers after the dot. Format: "lowercase.#" (e.g., john.1)';
-            }
-            
-            // Check parts before and after dot
-            const parts = value.split('.');
-            if (parts.length > 2) {
-                return 'Username can only have one dot. Format: "lowercase.#" (e.g., john.1)';
-            }
-            
-            const beforeDot = parts[0];
-            const afterDot = parts[1];
-            
-            if (!/^[a-z]+$/.test(beforeDot)) {
-                if (/[0-9]/.test(beforeDot)) {
-                    return 'Letters before the dot must be lowercase only, no numbers. Format: "lowercase.#" (e.g., john.1)';
-                }
-                if (/[^a-z]/.test(beforeDot)) {
-                    const invalidChars = beforeDot.match(/[^a-z]/g);
-                    if (invalidChars) {
-                        const uniqueChars = [...new Set(invalidChars)];
-                        return `Invalid characters before dot: ${uniqueChars.join(', ')}. Format: "lowercase.#" (e.g., john.1)`;
-                    }
-                }
-            }
-            
-            if (!/^[0-9]+$/.test(afterDot)) {
-                if (/[a-zA-Z]/.test(afterDot)) {
-                    return 'After the dot, only numbers are allowed. Format: "lowercase.#" (e.g., john.1)';
-                }
-                if (/[^0-9]/.test(afterDot)) {
-                    const invalidChars = afterDot.match(/[^0-9]/g);
-                    if (invalidChars) {
-                        const uniqueChars = [...new Set(invalidChars)];
-                        return `Invalid characters after dot: ${uniqueChars.join(', ')}. Format: "lowercase.#" (e.g., john.1)`;
-                    }
-                }
-            }
-        }
-
-        // Length constraints
-        if (value.length < 3) {
-            return 'Username must be at least 3 characters (e.g., john.1)';
-        }
-        if (value.length > 50) {
-            return 'Username must be at most 50 characters';
-        }
-
-        // Check if it matches the pattern now
-        if (!/^[a-z]+\.[0-9]+$/.test(value)) {
-            return 'Username format must be "lowercase.#" (e.g., john.1)';
-        }
-
-        // Not a reserved username
-        if (this.isReservedUsername && this.isReservedUsername(value.split('.')[0])) {
-            return 'This username is reserved and cannot be used';
-        }
-
-        return null; // No error
-    }
-
-    isValidUsername(value) {
-        if (!value) return false;
-
-        // Format must be: lowercase letters, dot, numbers (e.g., "john.1")
-        // Pattern: ^[a-z]+\.[0-9]+$
-        
-        // Check for uppercase letters
-        if (/[A-Z]/.test(value)) return false;
-
-        // Check if format matches "lowercase.#" pattern
-        if (!/^[a-z]+\.[0-9]+$/.test(value)) return false;
-
-        // Length constraints
-        if (value.length < 3 || value.length > 50) return false;
-
-        // Not a reserved username
-        const beforeDot = value.split('.')[0];
-        if (this.isReservedUsername && this.isReservedUsername(beforeDot)) return false;
-
-        return true;
-    }
-
-    isReservedUsername(name) {
-        const reserved = new Set([
-            'admin','administrator','root','system','support','help','contact','service','services','security','owner','staff','moderator','mod','test','testing','null','undefined','superuser'
-        ]);
-        return reserved.has(name);
-    }
-
-    handleSubmit(e) {
-        e.preventDefault();
-        
-        // Validate all required fields before submission
-        if (!this.validateForm()) {
+        if (!val) {
+            if (strengthBadge) strengthBadge.textContent = '';
             return;
         }
-        
-        this.submitForm();
+
+        const { score, label } = evaluatePassword(val);
+        if (strengthBadge) {
+            strengthBadge.textContent = label;
+            if (score === 1) strengthBadge.style.color = '#ef4444';
+            else if (score === 2) strengthBadge.style.color = '#f59e0b';
+            else if (score === 3) strengthBadge.style.color = '#06b6d4';
+            else if (score === 4) strengthBadge.style.color = '#22c55e';
+        }
+
+        let activeClass = 'active-weak';
+        if (score === 2) activeClass = 'active-fair';
+        if (score === 3) activeClass = 'active-good';
+        if (score === 4) activeClass = 'active-strong';
+
+        for (let i = 0; i < score; i++) {
+            if (segments[i]) segments[i].classList.add(activeClass);
+        }
     }
 
-    submitForm() {
-        const submitBtn = this.form.querySelector('.cyber-btn');
-        const originalText = submitBtn.querySelector('.btn-text').textContent;
+    if (passwordInput) {
+        passwordInput.addEventListener('input', updateStrengthMeter);
+    }
+
+    // ── Security Questions Synchronization ───────────────────────────────────
+    const sqSelects = [q1Select, q2Select, q3Select];
+    const sqAnswers = [a1Input, a2Input, a3Input];
+
+    function syncSecurityQuestions() {
+        const selectedValues = sqSelects.map(s => s ? s.value : '').filter(v => v !== '');
+
+        sqSelects.forEach((select, idx) => {
+            if (!select) return;
+            const answerInput = sqAnswers[idx];
+            
+            if (select.value) {
+                if (answerInput) answerInput.disabled = false;
+            } else {
+                if (answerInput) {
+                    answerInput.disabled = true;
+                    answerInput.value = '';
+                    clearFieldError(answerInput.id);
+                }
+            }
+
+            Array.from(select.options).forEach(opt => {
+                if (!opt.value) return;
+                if (opt.value !== select.value && selectedValues.includes(opt.value)) {
+                    opt.disabled = true;
+                } else {
+                    opt.disabled = false;
+                }
+            });
+        });
+    }
+
+    sqSelects.forEach((select, idx) => {
+        if (!select) return;
+        select.addEventListener('change', () => {
+            syncSecurityQuestions();
+            validateField(select.id, true);
+            if (select.value && sqAnswers[idx]) {
+                sqAnswers[idx].focus();
+            }
+        });
+    });
+
+    // ── Step Validation Gates ────────────────────────────────────────────────
+    function validateStep1(markAll = false) {
+        let isValid = true;
+        let firstInvalid = null;
+        const step1Keys = ['firstName', 'middleInitial', 'lastName', 'sex', 'birthDate'];
         
-        // Show loading state
-        submitBtn.querySelector('.btn-text').textContent = 'INITIALIZING...';
-        submitBtn.disabled = true;
-        
-        // Simulate cyberpunk loading effect
-        this.simulateLoading();
-        
-        // Collect form data
-        const formData = new FormData(this.form);
-        const data = Object.fromEntries(formData);
-        
-        // Send to server: stash registration first (defer DB insert)
-        fetch('../php/register_step1.php', {
+        updateAge();
+
+        step1Keys.forEach(key => {
+            if (markAll) {
+                fieldStates[key].wasBlurred = true;
+                fieldStates[key].touched = true;
+            }
+            const ok = validateField(key, markAll);
+            if (!ok) {
+                isValid = false;
+                if (!firstInvalid) firstInvalid = document.getElementById(key);
+            }
+        });
+
+        const bVal = birthDateInput ? birthDateInput.value : '';
+        if (bVal) {
+            const computed = calculateAge(bVal);
+            if (computed === null || computed < 18) {
+                showFieldError('age', 'Age must be at least 18 years old');
+                isValid = false;
+                if (!firstInvalid) firstInvalid = birthDateInput;
+            } else {
+                markFieldValid('age');
+            }
+        }
+
+        if (firstInvalid) {
+            firstInvalid.focus();
+        }
+        return isValid;
+    }
+
+    function validateStep2(markAll = false) {
+        let isValid = true;
+        let firstInvalid = null;
+        const step2Keys = ['purokStreet', 'barangay', 'city', 'province', 'country', 'zipCode'];
+
+        step2Keys.forEach(key => {
+            if (markAll) {
+                fieldStates[key].wasBlurred = true;
+                fieldStates[key].touched = true;
+            }
+            const ok = validateField(key, markAll);
+            if (!ok) {
+                isValid = false;
+                if (!firstInvalid) firstInvalid = document.getElementById(key);
+            }
+        });
+
+        if (firstInvalid) {
+            firstInvalid.focus();
+        }
+        return isValid;
+    }
+
+    function validateStep3(markAll = false) {
+        let isValid = true;
+        let firstInvalid = null;
+        const step3Keys = ['email', 'username', 'password', 'confirmPassword', 'q1', 'a1', 'q2', 'a2', 'q3', 'a3'];
+
+        step3Keys.forEach(key => {
+            if (markAll) {
+                fieldStates[key].wasBlurred = true;
+                fieldStates[key].touched = true;
+            }
+            const ok = validateField(key, markAll);
+            if (!ok) {
+                isValid = false;
+                if (!firstInvalid) firstInvalid = document.getElementById(key);
+            }
+        });
+
+        if (q1Select && q2Select && q3Select && q1Select.value && q2Select.value && q3Select.value) {
+            if (new Set([q1Select.value, q2Select.value, q3Select.value]).size < 3) {
+                showFieldError('q3', 'All 3 security questions must be unique');
+                isValid = false;
+                if (!firstInvalid) firstInvalid = q3Select;
+            }
+        }
+
+        if (firstInvalid) {
+            firstInvalid.focus();
+        }
+        return isValid;
+    }
+
+    // ── Wizard Navigation Controller ─────────────────────────────────────────
+    function goToStep(targetStep) {
+        if (targetStep === currentStep) return;
+
+        // If moving forward, enforce step validation
+        if (targetStep > currentStep) {
+            if (currentStep === 1 && !validateStep1(true)) return false;
+            if (currentStep === 2 && !validateStep2(true)) return false;
+        }
+
+        const prevPane = panes[currentStep - 1];
+        const nextPane = panes[targetStep - 1];
+        if (!prevPane || !nextPane) return;
+
+        prevPane.style.opacity = '0';
+        prevPane.style.transform = targetStep > currentStep ? 'translateX(-12px)' : 'translateX(12px)';
+
+        setTimeout(() => {
+            prevPane.classList.remove('active');
+            prevPane.style.transform = '';
+
+            nextPane.classList.add('active');
+            nextPane.style.opacity = '0';
+            nextPane.style.transform = targetStep > currentStep ? 'translateX(12px)' : 'translateX(-12px)';
+
+            void nextPane.offsetWidth;
+
+            nextPane.style.opacity = '1';
+            nextPane.style.transform = 'translateX(0)';
+
+            currentStep = targetStep;
+
+            for (let i = 1; i <= 3; i++) {
+                const btn = document.getElementById(`tabBtn${i}`);
+                if (btn) {
+                    btn.classList.toggle('active', i === currentStep);
+                    btn.setAttribute('aria-selected', i === currentStep ? 'true' : 'false');
+                }
+            }
+
+            if (currentStep === 1 && firstNameInput) firstNameInput.focus();
+            else if (currentStep === 2 && purokStreetInput) purokStreetInput.focus();
+            else if (currentStep === 3 && emailInput) emailInput.focus();
+        }, 150);
+
+        return true;
+    }
+
+    // Navigation buttons
+    document.getElementById('tabBtn1')?.addEventListener('click', () => { goToStep(1); });
+    document.getElementById('tabBtn2')?.addEventListener('click', () => { goToStep(2); });
+    document.getElementById('tabBtn3')?.addEventListener('click', () => { goToStep(3); });
+
+    step1NextBtn?.addEventListener('click', () => { goToStep(2); });
+    step2BackBtn?.addEventListener('click', () => { goToStep(1); });
+    step2NextBtn?.addEventListener('click', () => { goToStep(3); });
+    step3BackBtn?.addEventListener('click', () => { goToStep(2); });
+
+    // Enter key handling
+    form.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            if (currentStep === 1) {
+                goToStep(2);
+            } else if (currentStep === 2) {
+                goToStep(3);
+            } else if (currentStep === 3) {
+                handleRegistrationSubmit();
+            }
+        }
+    });
+
+    // ── Form Submission ──────────────────────────────────────────────────────
+    async function handleRegistrationSubmit() {
+        if (isSubmitting) return;
+
+        // Immediately block if email or username was already flagged duplicate
+        if (fieldStates.email && fieldStates.email.isDuplicate) {
+            showFieldError('email', 'This email address is already registered.');
+            goToStep(3);
+            if (emailInput) emailInput.focus();
+            return;
+        }
+
+        if (fieldStates.username && fieldStates.username.isDuplicate) {
+            showFieldError('username', 'This username is already taken.');
+            goToStep(3);
+            if (usernameInput) usernameInput.focus();
+            return;
+        }
+
+        // Validate all 3 steps before submitting
+        const s1Ok = validateStep1(true);
+        if (!s1Ok) {
+            goToStep(1);
+            return;
+        }
+
+        const s2Ok = validateStep2(true);
+        if (!s2Ok) {
+            goToStep(2);
+            return;
+        }
+
+        const s3Ok = validateStep3(true);
+        if (!s3Ok) {
+            return;
+        }
+
+        // Clear any pending debounces and do a live pre-flight check
+        clearTimeout(emailCheckTimeout);
+        clearTimeout(usernameCheckTimeout);
+
+        const emailVal = emailInput ? emailInput.value.trim() : '';
+        if (emailVal) {
+            try {
+                const res = await fetch('../php/check_email.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: emailVal })
+                });
+                const data = await res.json();
+                const isTaken = (data && data.exists === true) || (data && data.data && data.data.exists === true);
+                if (isTaken) {
+                    fieldStates.email.isDuplicate = true;
+                    fieldStates.email.lastCheckedValue = emailVal.toLowerCase();
+                    showFieldError('email', 'This email address is already registered.');
+                    goToStep(3);
+                    if (emailInput) emailInput.focus();
+                    return;
+                }
+            } catch (e) {}
+        }
+
+        const usernameVal = usernameInput ? usernameInput.value.trim() : '';
+        if (usernameVal) {
+            try {
+                const res = await fetch('../php/check_username.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: usernameVal })
+                });
+                const data = await res.json();
+                const isTaken = (data && data.exists === true) || (data && data.data && data.data.exists === true);
+                if (isTaken) {
+                    fieldStates.username.isDuplicate = true;
+                    fieldStates.username.lastCheckedValue = usernameVal.toLowerCase();
+                    showFieldError('username', 'This username is already taken.');
+                    goToStep(3);
+                    if (usernameInput) usernameInput.focus();
+                    return;
+                }
+            } catch (e) {}
+        }
+
+        const metaCsrf = document.querySelector('meta[name="csrf-token"]');
+        const csrfToken = metaCsrf ? metaCsrf.getAttribute('content') : '';
+
+        const payload = {
+            csrf_token: csrfToken,
+            firstName: firstNameInput.value,
+            middleInitial: middleInitialInput ? middleInitialInput.value : '',
+            lastName: lastNameInput.value,
+            suffix: suffixSelect ? suffixSelect.value : '',
+            sex: sexSelect ? sexSelect.value : '',
+            birthDate: birthDateInput ? birthDateInput.value : '',
+            purokStreet: purokStreetInput ? purokStreetInput.value : '',
+            barangay: barangayInput ? barangayInput.value : '',
+            city: cityInput ? cityInput.value : '',
+            province: provinceInput ? provinceInput.value : '',
+            country: countryInput ? countryInput.value : '',
+            zipCode: zipCodeInput ? zipCodeInput.value : '',
+            email: emailInput ? emailInput.value : '',
+            username: usernameInput ? usernameInput.value : '',
+            password: passwordInput ? passwordInput.value : '',
+            confirmPassword: confirmPasswordInput ? confirmPasswordInput.value : '',
+            q1: q1Select ? q1Select.value : '',
+            a1: a1Input ? a1Input.value : '',
+            q2: q2Select ? q2Select.value : '',
+            a2: a2Input ? a2Input.value : '',
+            q3: q3Select ? q3Select.value : '',
+            a3: a3Input ? a3Input.value : ''
+        };
+
+        isSubmitting = true;
+        if (completeRegBtn) {
+            completeRegBtn.disabled = true;
+            completeRegBtn.innerHTML = `
+                <span class="reg-spinner"></span>
+                <span>Registering...</span>
+            `;
+        }
+
+        fetch('../php/register.php', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken
             },
-            body: JSON.stringify(data)
+            body: JSON.stringify(payload)
         })
-        .then(async response => {
-            const text = await response.text();
-            try {
-                const json = JSON.parse(text);
-                return { ok: response.ok, json, raw: text };
-            } catch (e) {
-                return { ok: response.ok, json: null, raw: text };
+        .then(async (response) => {
+            const data = await response.json().catch(() => null);
+            if (!data) {
+                throw new Error('Invalid server response');
             }
+            return { ok: response.ok, status: response.status, data };
         })
-        .then(result => {
-            if (!result.ok || !result.json) {
-                console.error('Registration response not OK or invalid JSON:', result.raw);
-                this.showSystemError('System error. Please try again.');
-                return;
-            }
-            const data = result.json;
+        .then(({ ok, status, data }) => {
             if (data.success) {
-                this.showSuccess('Neural profile Step 1 complete. Proceeding to security questions...');
-                // Show generated ID if provided
-                if (data.idNumber) {
-                    const idInput = document.getElementById('idNumber');
-                    if (idInput) idInput.value = data.idNumber;
+                isDirty = false;
+                showToast(data.message || 'Registration successful!', 'success', 5000);
+                if (completeRegBtn) {
+                    completeRegBtn.innerHTML = `<span>✓ Completed</span>`;
                 }
                 setTimeout(() => {
-                    window.location.href = 'register_security.php';
-                }, 1500);
+                    window.location.href = 'login.php?registered=1';
+                }, 2000);
             } else {
+                isSubmitting = false;
+                if (completeRegBtn) {
+                    completeRegBtn.disabled = false;
+                    completeRegBtn.innerHTML = completeRegText ? completeRegText.outerHTML : 'Complete Registration &check;';
+                }
+
+                showToast(data.message || 'Please resolve the highlighted validation errors.', 'error');
+
                 if (data.fieldErrors) {
-                    this.showFieldErrors(data.fieldErrors);
-                }
-                this.showSystemError(data.message || 'Registration failed');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            this.showSystemError('System error. Please try again.');
-        })
-        .finally(() => {
-            // Reset button
-            submitBtn.querySelector('.btn-text').textContent = originalText;
-            submitBtn.disabled = false;
-        });
-    }
-
-    simulateLoading() {
-        const terminal = document.querySelector('.terminal-prompt .cursor-blink');
-        if (terminal) {
-            let dots = 0;
-            const interval = setInterval(() => {
-                dots = (dots + 1) % 4;
-                terminal.textContent = '.'.repeat(dots) + '_';
-            }, 500);
-            
-            setTimeout(() => {
-                clearInterval(interval);
-                terminal.textContent = '_';
-            }, 3000);
-        }
-    }
-
-    showSuccess(message) {
-        this.showSystemMessage(message, 'success');
-    }
-
-    showSystemError(message) {
-        this.showSystemMessage(message, 'error');
-    }
-
-    showFieldErrors(fieldErrors) {
-        // Clear all existing errors first
-        this.clearAllErrors();
-        
-        // Show field-specific errors
-        Object.keys(fieldErrors).forEach(fieldName => {
-            const errorMessage = fieldErrors[fieldName];
-            this.showFieldError(fieldName, errorMessage);
-        });
-    }
-
-    showFieldError(fieldName, errorMessage) {
-        const field = document.getElementById(fieldName);
-        const errorElement = document.getElementById(fieldName + 'Error');
-        
-        if (field) {
-            // Highlight the field with error styling
-            field.style.borderColor = 'var(--cyber-error)';
-            field.style.boxShadow = '0 0 10px rgba(255, 107, 107, 0.3)';
-            field.classList.add('error-field');
-        }
-        
-        if (errorElement) {
-            errorElement.textContent = errorMessage;
-            errorElement.classList.add('show');
-        }
-    }
-
-    clearAllErrors() {
-        // Clear all field errors
-        const errorElements = document.querySelectorAll('.error-message');
-        errorElements.forEach(element => {
-            element.textContent = '';
-            element.classList.remove('show');
-        });
-        // Clear all success messages
-        const successElements = document.querySelectorAll('.success-message');
-        successElements.forEach(element => {
-            element.textContent = '';
-            element.classList.remove('show');
-        });
-        
-        // Clear all field highlighting
-        const fields = document.querySelectorAll('.cyber-input');
-        fields.forEach(field => {
-            field.style.borderColor = '';
-            field.style.boxShadow = '';
-            field.classList.remove('error-field');
-        });
-    }
-
-    showSystemMessage(message, type) {
-        // Create system message overlay
-        const overlay = document.createElement('div');
-        overlay.className = `system-message ${type}`;
-        overlay.innerHTML = `
-            <div class="message-content">
-                <div class="message-icon">${type === 'success' ? '✓' : '⚠'}</div>
-                <div class="message-text">${message}</div>
-            </div>
-        `;
-        
-        // Add styles
-        overlay.style.cssText = `
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0, 0, 0, 0.9);
-            border: 2px solid ${type === 'success' ? 'var(--cyber-success)' : 'var(--cyber-error)'};
-            border-radius: 8px;
-            padding: 1rem;
-            z-index: 10000;
-            color: var(--cyber-text);
-            font-family: 'Orbitron', monospace;
-            text-align: center;
-            box-shadow: 0 0 30px ${type === 'success' ? 'rgba(0, 255, 0, 0.3)' : 'rgba(255, 0, 64, 0.3)'};
-        `;
-        
-        document.body.appendChild(overlay);
-        
-        // Remove after 3 seconds
-        setTimeout(() => {
-            overlay.remove();
-        }, 3000);
-    }
-}
-
-// Password toggle functionality with cyber SVG
-function togglePassword(fieldId) {
-    const field = document.getElementById(fieldId);
-    const button = field.nextElementSibling;
-    
-    if (field.type === 'password') {
-        field.type = 'text';
-        button.innerHTML = getEyeSVG(true);
-        button.setAttribute('aria-label', 'Hide password');
-        button.setAttribute('aria-pressed', 'true');
-    } else {
-        field.type = 'password';
-        button.innerHTML = getEyeSVG(false);
-        button.setAttribute('aria-label', 'Show password');
-        button.setAttribute('aria-pressed', 'false');
-    }
-}
-
-// Cyber eye SVG icon
-function getEyeSVG(isVisible) {
-    const stroke = isVisible ? '#ff00ff' : '#00eaff';
-    const glow = isVisible ? 'rgba(255,0,255,0.6)' : 'rgba(0,234,255,0.6)';
-    const slash = isVisible ? '<path d="M3 3L21 21"></path>' : '';
-    return `
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 0 6px ${glow});">
-        <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"></path>
-        <circle cx="12" cy="12" r="3"></circle>
-        ${slash}
-      </svg>
-    `;
-}
-
-function autoFixNameSpaces(str) {
-    if (typeof str !== 'string') return '';
-    return str.replace(/\s+/g, ' ').trim();
-}
-function toTitleCase(str) {
-    if (typeof str !== 'string') return '';
-    const lower = str.toLowerCase();
-    return lower.replace(/(?:^|[\s\-'])\w/g, function(match) {
-        return match.toUpperCase();
-    });
-}
-
-function capitalizeFirstLetter(str) {
-    if (typeof str !== 'string') return '';
-    const trimmed = str.trim();
-    if (!trimmed) return '';
-    return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
-}
-// Name fields now show warnings instead of auto-correcting
-// Auto-correction removed - validation with warnings is handled in setupCapitalizationValidation()
-
-// Extension field auto-correction removed - validation with warnings is handled in setupCapitalizationValidation()
-
-// Address fields (province, city, barangay, purok) auto-correction removed
-// Validation with warnings is handled in setupCapitalizationValidation()
-
-// Normalize username: trim, collapse spaces, replace spaces with underscore, lowercase, remove invalids, collapse underscores
-function normalizeUsername(str) {
-    if (!str) return '';
-    let v = str.replace(/\s+/g, ' ').trim();          // collapse spaces and trim
-    v = v.replace(/\s+/g, '_');                       // spaces -> underscore
-    v = v.toLowerCase();                               // force lowercase
-    v = v.replace(/[^a-z0-9_]/g, '');                  // keep only a-z0-9_
-    v = v.replace(/_+/g, '_');                         // collapse multiple underscores
-    v = v.replace(/^[0-9]+/, '');                      // drop leading digits
-    return v;
-}
-// Initialize the cyberpunk registration system
-document.addEventListener('DOMContentLoaded', () => {
-    const app = new CyberpunkRegistration();
-    app.updateBodyScrollState();
-    let resizeTimeout = null;
-    window.addEventListener('resize', () => {
-        clearTimeout(resizeTimeout);
-        resizeTimeout = setTimeout(() => app.updateBodyScrollState(), 150);
-    });
-    
-    // Add cyberpunk sound effects (optional)
-    const inputs = document.querySelectorAll('.cyber-input');
-    inputs.forEach(input => {
-        input.addEventListener('focus', () => {
-            // Add subtle visual feedback
-            input.parentElement.style.transform = 'scale(1.02)';
-        });
-        
-        input.addEventListener('blur', () => {
-            input.parentElement.style.transform = 'scale(1)';
-        });
-    });
-
-    const idInput = document.getElementById('idNumber');
-    const idIcon = document.getElementById('idNumberIcon');
-    if (idInput) {
-        // Check if ID already exists (page reload)
-        if (idInput.value && idInput.value.trim() !== '') {
-            // ID already exists, show icon and disable click
-            if (idIcon) {
-                idIcon.style.display = 'block';
-            }
-            idInput.classList.add('locked');
-            idInput.style.pointerEvents = 'none';
-            idInput.style.cursor = 'not-allowed';
-            idInput.style.paddingRight = '2rem';
-        } else {
-            // ID doesn't exist, allow click to generate
-            idInput.addEventListener('click', function () {
-                // Prevent multiple clicks
-                if (idInput.classList.contains('locked')) {
-                    return;
-                }
-                
-                fetch('../php/get_next_id.php')
-                    .then(response => response.json())
-                    .then(result => {
-                        if (result.success && result.idNumber) {
-                            idInput.value = result.idNumber;
-                            
-                            // Show blocked icon
-                            if (idIcon) {
-                                idIcon.style.display = 'block';
-                            }
-                            
-                            // Lock the field and prevent further clicks
-                            idInput.classList.add('locked');
-                            idInput.style.pointerEvents = 'none';
-                            idInput.style.cursor = 'not-allowed';
-                            idInput.style.paddingRight = '2rem';
-                            
-                            // Clear any previous errors and styling
-                            const errorElement = document.getElementById('idError');
-                            if (errorElement) {
-                                errorElement.textContent = '';
-                                errorElement.classList.remove('show');
-                            }
-                            // Clear error styling from input
-                            idInput.style.borderColor = '';
-                            idInput.style.boxShadow = '';
-                            idInput.classList.remove('error-field');
-                        } else {
-                            const errorElement = document.getElementById('idError');
-                            if (errorElement) {
-                                errorElement.textContent = 'Unable to retrieve ID number. Please try again.';
-                                errorElement.classList.add('show');
-                            }
-                            idInput.style.borderColor = 'var(--cyber-error)';
-                            idInput.style.boxShadow = '0 0 10px rgba(255, 0, 64, 0.3)';
-                        }
-                    })
-                    .catch(() => {
-                        const errorElement = document.getElementById('idError');
-                        if (errorElement) {
-                            errorElement.textContent = 'Unable to retrieve ID number. Please try again.';
-                            errorElement.classList.add('show');
-                        }
-                        idInput.style.borderColor = 'var(--cyber-error)';
-                        idInput.style.boxShadow = '0 0 10px rgba(255, 0, 64, 0.3)';
+                    Object.entries(data.fieldErrors).forEach(([fieldId, msg]) => {
+                        showFieldError(fieldId, msg);
                     });
-            });
-        }
+
+                    if (data.step && data.step !== currentStep) {
+                        goToStep(data.step);
+                    }
+                }
+            }
+        })
+        .catch(err => {
+            isSubmitting = false;
+            if (completeRegBtn) {
+                completeRegBtn.disabled = false;
+                completeRegBtn.innerHTML = completeRegText ? completeRegText.outerHTML : 'Complete Registration &check;';
+            }
+            showToast(err.message || 'Network error occurred. Please try again.', 'error');
+        });
+    }
+
+    if (completeRegBtn) {
+        completeRegBtn.addEventListener('click', handleRegistrationSubmit);
     }
 });

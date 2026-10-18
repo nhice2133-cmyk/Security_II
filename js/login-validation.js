@@ -46,6 +46,12 @@ document.addEventListener('DOMContentLoaded', function() {
     usernameInput.addEventListener('input', function() {
         usernameTyped = true;
         addTypingEffect(usernameInput);
+        const errorElement = getOrCreateErrorElement(usernameInput);
+        if (usernameInput.value.trim().length >= 3) {
+            clearError(usernameInput, errorElement);
+        } else if (usernameInput.classList.contains('error')) {
+            validateUsername();
+        }
     });
     
     passwordInput.addEventListener('blur', function() {
@@ -57,7 +63,23 @@ document.addEventListener('DOMContentLoaded', function() {
     passwordInput.addEventListener('input', function() {
         passwordTyped = true;
         addTypingEffect(passwordInput);
+        const errorElement = getOrCreateErrorElement(passwordInput);
+        if (passwordInput.value.trim().length >= 6) {
+            clearError(passwordInput, errorElement);
+        } else if (passwordInput.classList.contains('error')) {
+            validatePassword();
+        }
     });
+
+    // Allow URL query parameter (?reset=1 or ?unlock=1) to clear client-side lockout
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('reset') || urlParams.has('unlock') || urlParams.has('reset_timer')) {
+        localStorage.removeItem('lockoutUntil');
+        localStorage.removeItem('loginAttempts');
+        localStorage.removeItem('lockoutLevel');
+        clearLockoutState();
+        if (loginAttemptsDiv) loginAttemptsDiv.style.display = 'none';
+    }
 
     // Restore lockout state on load
     restoreLockoutState();
@@ -201,7 +223,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const password = passwordInput.value;
         const errorElement = getOrCreateErrorElement(passwordInput);
         
-        if (password === '') {
+        if (password.trim() === '') {
             showError(passwordInput, errorElement, 'ENCRYPTION KEY REQUIRED');
             return false;
         }
@@ -327,8 +349,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (until && Date.now() < until) {
             applyLockout(until);
         } else {
-            // clear stale lockout
-            if (until) clearLockoutState();
+            // clear stale lockout and ensure form is interactable
+            clearLockoutState();
         }
         // show attempts if any
         const attempts = parseInt(localStorage.getItem('loginAttempts') || '0');
@@ -414,11 +436,18 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function getOrCreateErrorElement(input) {
-        let errorElement = input.parentNode.querySelector('.error-message');
+        let errorElement = document.getElementById(input.id + '-error') ||
+                           (input.closest('.input-group') ? input.closest('.input-group').querySelector('.error-message') : null) ||
+                           input.parentNode.querySelector('.error-message');
         if (!errorElement) {
-            errorElement = document.createElement('span');
+            errorElement = document.createElement('div');
             errorElement.className = 'error-message';
-            input.parentNode.appendChild(errorElement);
+            errorElement.id = input.id + '-error';
+            if (input.closest('.input-group')) {
+                input.closest('.input-group').appendChild(errorElement);
+            } else {
+                input.parentNode.appendChild(errorElement);
+            }
         }
         return errorElement;
     }

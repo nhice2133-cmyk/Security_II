@@ -11,10 +11,14 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     sendJsonResponse(false, 'Invalid request method');
 }
 
-$idNumber = sanitizeInput($_POST['idNumber'] ?? '');
+$idNumber = trim(sanitizeInput($_POST['idNumber'] ?? ''));
 
-if (empty($idNumber)) {
+if ($idNumber === '') {
     sendJsonResponse(false, 'ID Number is required');
+}
+
+if (strlen($idNumber) > 50) {
+    sendJsonResponse(false, 'ID Number is invalid');
 }
 
 $db = new Database();

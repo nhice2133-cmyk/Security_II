@@ -48,6 +48,7 @@ $provinceRaw = trim((string)($input['province'] ?? ''));
 $cityRaw = trim((string)($input['city'] ?? ''));
 $barangayRaw = trim((string)($input['barangay'] ?? ''));
 $purokRaw = trim((string)($input['purok'] ?? ''));
+$zipCodeRaw = trim((string)($input['zipCode'] ?? $input['zip_code'] ?? ''));
 
 $errors = [];
 $namePattern = "/^[a-zA-Z\s\-'.]+$/";
@@ -64,18 +65,30 @@ $barangayValue = trim(preg_replace('/\s+/', ' ', $barangayRaw));
 $purokValue = preg_replace('/\s+/', ' ', $purokRaw);
 $purokValue = preg_replace('/[^A-Za-z0-9\s\-]/', ' ', $purokValue ?? '');
 $purokValue = trim($purokValue);
+$zipCodeValue = trim($zipCodeRaw);
 $addressValue = trim(preg_replace('/\s+/', ' ', $addressRaw));
+if ($addressValue === '') {
+    $addressValue = trim(implode(', ', array_filter([$purokValue, $barangayValue, $cityValue, $provinceValue, $countryValue ?? '', $zipCodeValue])));
+}
 
 if ($firstNameRaw === '' || !preg_match($namePattern, $firstNameRaw)) {
     $errors[] = 'Invalid first name';
+} elseif (strlen($firstNameRaw) > 100) {
+    $errors[] = 'First name cannot exceed 100 characters';
 }
 
 if ($lastNameRaw === '' || !preg_match($namePattern, $lastNameRaw)) {
     $errors[] = 'Invalid last name';
+} elseif (strlen($lastNameRaw) > 100) {
+    $errors[] = 'Last name cannot exceed 100 characters';
 }
 
-if ($middleNameRaw !== '' && !preg_match($namePattern, $middleNameRaw)) {
-    $errors[] = 'Invalid middle name';
+if ($middleNameRaw !== '') {
+    if (!preg_match($namePattern, $middleNameRaw)) {
+        $errors[] = 'Invalid middle name';
+    } elseif (strlen($middleNameRaw) > 100) {
+        $errors[] = 'Middle name cannot exceed 100 characters';
+    }
 }
 
 if ($extensionRaw !== '') {
@@ -86,11 +99,11 @@ if ($extensionRaw !== '') {
     }
 }
 
-if ($usernameRaw === '' || strlen($usernameRaw) < 3 || !preg_match('/^[a-zA-Z0-9_]+$/', $usernameRaw)) {
-    $errors[] = 'Invalid username';
+if ($usernameRaw === '' || strlen($usernameRaw) < 3 || strlen($usernameRaw) > 50 || !preg_match('/^[a-zA-Z0-9_]+$/', $usernameRaw)) {
+    $errors[] = 'Username must be between 3 and 50 characters (letters, numbers, and underscores only)';
 }
-if ($emailRaw === '' || !validateEmail($emailRaw)) {
-    $errors[] = 'Invalid email';
+if ($emailRaw === '' || strlen($emailRaw) > 100 || !validateEmail($emailRaw)) {
+    $errors[] = 'Please enter a valid email address (maximum 100 characters)';
 }
 
 if ($phoneRaw === '') {
@@ -115,8 +128,8 @@ if ($birthDateRaw === '') {
             $errors[] = 'Birth date cannot be in the future';
         } else {
             $computedAge = $birthDateObj->diff($today)->y;
-            if ($computedAge < 1 || $computedAge > 120) {
-                $errors[] = 'Age must be between 1 and 120';
+            if ($computedAge < 18 || $computedAge > 120) {
+                $errors[] = 'You must be at least 18 years old';
             }
         }
     }
@@ -213,6 +226,14 @@ try {
         exit;
     }
 
+    // Ensure email uniqueness excluding current user
+    $chkEmail = $db->prepare('SELECT id FROM users WHERE LOWER(email) = ? AND id <> ? LIMIT 1');
+    $chkEmail->execute([strtolower($email), $_SESSION['user_id']]);
+    if ($chkEmail->fetch()) {
+        echo json_encode(['success' => false, 'message' => 'Email address is already in use by another account']);
+        exit;
+    }
+
     $formattedExtension = $extension;
     if ($extension !== null) {
         $labelMap = [
@@ -230,7 +251,7 @@ try {
     // That transition is the exclusive responsibility of process-initial-setup.php
     // which performs full validation (password, security questions, etc.).
     // Silently promoting status here allows bypassing the initial setup flow.
-    $stmt = $db->prepare('UPDATE users SET first_name = ?, middle_name = ?, last_name = ?, extension = ?, username = ?, email = ?, phone_number = ?, phone = ?, address = ?, birth_date = ?, age = ?, sex = ?, purok_street = ?, barangay = ?, city = ?, province = ?, country = ? WHERE id = ? AND status NOT IN (\'pending_setup\', \'pending\')');
+    $stmt = $db->prepare('UPDATE users SET first_name = ?, middle_name = ?, last_name = ?, extension = ?, username = ?, email = ?, phone_number = ?, phone = ?, address = ?, birth_date = ?, age = ?, sex = ?, purok_street = ?, barangay = ?, city = ?, province = ?, country = ?, zip_code = ? WHERE id = ? AND status NOT IN (\'pending_setup\', \'pending\')');
     $stmt->execute([
         $firstName,
         $middleName,
@@ -249,11 +270,13 @@ try {
         $city,
         $province,
         $country,
+        $zipCodeValue,
         $_SESSION['user_id']
     ]);
 
     $_SESSION['username'] = $username;
     $_SESSION['email'] = $email;
+    logActivity($_SESSION['user_id'], 'PROFILE_UPDATED', "User '{$username}' updated their personal profile information");
     // SECURITY: Do NOT approve pending_setup status here.
     // Status changes are managed exclusively by process-initial-setup.php.
 

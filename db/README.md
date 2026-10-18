@@ -39,15 +39,21 @@ define('DB_NAME', 'auth_system');
 > **Important:** Do NOT use `root` as the database user in production.
 > Create a dedicated database account with only the required privileges (SELECT, INSERT, UPDATE, DELETE on the `auth_system` database).
 
-## First Admin Account
+## Seeded Accounts
 
-The SQL file does **not** ship any default credentials.
+The `auth_system.sql` file comes configured with exactly 3 accounts:
 
-After deploying, use the Super Admin creation flow in the application to create
-the first privileged account. You will be prompted to set a strong password and
-security questions on first login.
+| Role | Username | Password | Email | ID Number |
+|---|---|---|---|---|
+| **Super Admin** (`super_admin`) | `superadmin` | `Admin@12345!` | `superadmin@example.com` | `EMP-001` |
+| **Administrator** (`admin`) | `admin` | `Admin@12345!` | `admin@example.com` | `2026-0001` |
+| **Regular User** (`user`) | `user` | `User@1234` | `user@example.com` | `2026-0002` |
 
-> **Never** hard-code or commit default admin passwords into source files or documentation.
+### Security Recovery Questions (All 3 Accounts)
+All 3 accounts have the default security questions pre-configured with the answer `admin`:
+- **Q1:** Who is your best friend in Elementary? -> `admin`
+- **Q2:** What is the name of your favorite pet? -> `admin`
+- **Q3:** Who is your favorite teacher in high school? -> `admin`
 
 ## Database Structure
 
@@ -62,6 +68,8 @@ security questions on first login.
 7. **otps** — OTP codes for password recovery flow
 8. **delete_requests** — Admin-initiated deletion request queue
 9. **super_admin_lock** — Singleton lock for single-active Super Admin enforcement
+10. **superadmin_handover_settings** — Superadmin handover deactivation and reactivation tracking
+11. **superadmin_succession_logs** — Superadmin succession audit log
 
 ## Notes
 

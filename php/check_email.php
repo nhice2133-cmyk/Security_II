@@ -5,10 +5,16 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     sendJsonResponse(false, 'Invalid request method');
 }
 
-$email = strtolower(sanitizeInput($_POST['email'] ?? ''));
+$raw = file_get_contents('php://input');
+$json = json_decode($raw, true);
+$email = strtolower(trim(sanitizeInput($_POST['email'] ?? ($json['email'] ?? ''))));
 
-if (empty($email)) {
+if ($email === '') {
     sendJsonResponse(false, 'Email is required');
+}
+
+if (strlen($email) > 254) {
+    sendJsonResponse(false, 'Email cannot exceed 254 characters');
 }
 
 if (!validateEmail($email)) {
@@ -17,12 +23,18 @@ if (!validateEmail($email)) {
 
 $db = new Database();
 
-// Check if email exists
-$stmt = $db->prepare("SELECT id FROM users WHERE LOWER(email) = ? AND is_active = 1");
+// Check if email exists across all accounts (active, pending, or inactive)
+$stmt = $db->prepare("SELECT id FROM users WHERE LOWER(email) = ? LIMIT 1");
 $stmt->execute([$email]);
 $exists = $stmt->fetch() !== false;
 
-sendJsonResponse(true, '', ['exists' => $exists]);
+header('Content-Type: application/json');
+echo json_encode([
+    'success' => true,
+    'exists' => $exists,
+    'data' => ['exists' => $exists]
+]);
+exit;
 ?>
 
 

@@ -15,3 +15,10 @@ otp_log.txt
 
 # Setup token file (used by CLI admin creation scripts)
 .setup_token
+
+# Temporary scratch and test artifacts
+scratch/
+*cookie*.txt
+*.tmp
+*.bak
+

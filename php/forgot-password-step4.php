@@ -33,27 +33,16 @@ if ($_SESSION['reset_verified_id'] !== $_SESSION['reset_authorized_id']) {
 
 $sessionIdNumber = $_SESSION['reset_authorized_id']; // trusted
 
-$password = $_POST['password'] ?? '';
+$password = (string)($_POST['password'] ?? '');
 
-if (empty($password)) {
-    sendJsonResponse(false, 'New password is required');
+if (trim($password) === '') {
+    sendJsonResponse(false, 'New password is required and cannot be whitespace only');
 }
 
-// ── Centralised password policy (must match register_stash / change-password) ─
-if (strlen($password) < PASSWORD_MIN_LENGTH) {
-    sendJsonResponse(false, 'Password must be at least ' . PASSWORD_MIN_LENGTH . ' characters');
-}
-if (!preg_match('/[A-Z]/', $password)) {
-    sendJsonResponse(false, 'Password must contain at least one uppercase letter');
-}
-if (!preg_match('/[a-z]/', $password)) {
-    sendJsonResponse(false, 'Password must contain at least one lowercase letter');
-}
-if (!preg_match('/[0-9]/', $password)) {
-    sendJsonResponse(false, 'Password must contain at least one number');
-}
-if (!preg_match('/[^a-zA-Z0-9]/', $password)) {
-    sendJsonResponse(false, 'Password must contain at least one special character');
+// ── Centralised password policy ─
+$pwdErr = validatePassword($password);
+if ($pwdErr) {
+    sendJsonResponse(false, $pwdErr);
 }
 
 $db = new Database();

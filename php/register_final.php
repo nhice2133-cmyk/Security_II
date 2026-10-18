@@ -20,20 +20,25 @@ if (!isset($_SESSION['reg_step1'])) {
 $step1 = $_SESSION['reg_step1'];
 
 $q1 = sanitizeInput($payload['question1'] ?? '');
-$a1 = $payload['answer1'] ?? '';
+$a1 = trim((string)($payload['answer1'] ?? ''));
 $q2 = sanitizeInput($payload['question2'] ?? '');
-$a2 = $payload['answer2'] ?? '';
+$a2 = trim((string)($payload['answer2'] ?? ''));
 $q3 = sanitizeInput($payload['question3'] ?? '');
-$a3 = $payload['answer3'] ?? '';
+$a3 = trim((string)($payload['answer3'] ?? ''));
 
 $errors = [];
 $fieldErrors = [];
 
-if (empty($q1) || empty($a1) || empty($q2) || empty($a2) || empty($q3) || empty($a3)) {
+if ($q1 === '' || $a1 === '' || $q2 === '' || $a2 === '' || $q3 === '' || $a3 === '') {
     $errors[] = 'All 3 security questions and answers are required';
-    if (empty($a1)) $fieldErrors['answer1'] = 'Answer required';
-    if (empty($a2)) $fieldErrors['answer2'] = 'Answer required';
-    if (empty($a3)) $fieldErrors['answer3'] = 'Answer required';
+    if ($a1 === '') $fieldErrors['answer1'] = 'Answer required';
+    if ($a2 === '') $fieldErrors['answer2'] = 'Answer required';
+    if ($a3 === '') $fieldErrors['answer3'] = 'Answer required';
+}
+
+if ($q1 !== '' && $q2 !== '' && $q3 !== '' && count(array_unique([$q1, $q2, $q3])) < 3) {
+    $errors[] = 'All 3 security questions must be unique';
+    $fieldErrors['question3'] = 'Questions must be unique';
 }
 
 if (!empty($errors)) {

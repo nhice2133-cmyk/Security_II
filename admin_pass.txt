@@ -1,9 +1,37 @@
-Username: superadmin
-Password: Admin@12345!
+============================================================
+CYBERAUTH SYSTEM — DEFAULT SEEDED CREDENTIALS
+============================================================
 
-Username:user.1	
-Password:User@1234
+1. SUPER ADMINISTRATOR
+   Role:        super_admin
+   Username:    superadmin
+   Password:    Admin@12345!
+   Email:       superadmin@example.com
+   ID Number:   EMP-001
 
+2. ADMINISTRATOR
+   Role:        admin
+   Username:    admin
+   Password:    Admin@12345!
+   Email:       admin@example.com
+   ID Number:   2026-0001
 
-Username:admin	
-Password:Admin@12345!
+3. REGULAR USER
+   Role:        user
+   Username:    user
+   Password:    User@1234
+   Email:       user@example.com
+   ID Number:   2026-0002
+
+============================================================
+SECURITY QUESTIONS & RECOVERY ANSWERS (All Accounts)
+============================================================
+Question 1: Who is your best friend in Elementary?
+Answer:     admin
+
+Question 2: What is the name of your favorite pet?
+Answer:     admin
+
+Question 3: Who is your favorite teacher in high school?
+Answer:     admin
+============================================================

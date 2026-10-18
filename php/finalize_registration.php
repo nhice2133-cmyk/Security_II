@@ -31,6 +31,11 @@ if (!$q1 || !$q2 || !$q3 || $a1 === '' || $a2 === '' || $a3 === '') {
     exit;
 }
 
+if (count(array_unique([$q1, $q2, $q3])) < 3) {
+    echo json_encode(['success' => false, 'message' => 'All 3 security questions must be unique']);
+    exit;
+}
+
 $db = new Database();
 
 // Ensure username/email uniqueness just before insert
@@ -74,6 +79,8 @@ try {
     ]);
     $userId = $db->lastInsertId();
     error_log("User inserted successfully with ID: " . $userId);
+
+    logActivity($userId, 'ACCOUNT_CREATED', "New user registered account '{$pending['username']}' (ID: " . ($normalizedIdNumber ?? 'N/A') . ")");
 
     // Ensure user_security_questions table exists (for fresh installs)
     $db->query("CREATE TABLE IF NOT EXISTS user_security_questions (

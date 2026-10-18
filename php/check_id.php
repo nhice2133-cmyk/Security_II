@@ -5,20 +5,20 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     sendJsonResponse(false, 'Invalid request method');
 }
 
-$id = sanitizeInput($_POST['id'] ?? '');
+$id = trim(sanitizeInput($_POST['id'] ?? ''));
 
-if (empty($id)) {
+if ($id === '') {
     sendJsonResponse(false, 'ID is required');
 }
 
-if (!is_numeric($id)) {
+if (!preg_match('/^\d{4}-\d{4}$/', $id) && !is_numeric($id)) {
     sendJsonResponse(false, 'Invalid ID format');
 }
 
 $db = new Database();
 
-// Check if government/employee ID number exists (matches users.id_number)
-$stmt = $db->prepare("SELECT id FROM users WHERE id_number = ? AND is_active = 1");
+// Check if ID number exists across all accounts
+$stmt = $db->prepare("SELECT id FROM users WHERE id_number = ? LIMIT 1");
 $stmt->execute([$id]);
 $exists = $stmt->fetch() !== false;
 

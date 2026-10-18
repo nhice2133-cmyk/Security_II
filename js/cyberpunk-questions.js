@@ -185,6 +185,11 @@ class CyberpunkQuestions {
                         this.clearError(el, err);
                     }
                 });
+                el.addEventListener('input', () => {
+                    if (el.value.trim()) {
+                        this.clearError(el, err);
+                    }
+                });
             }
         });
     }

@@ -14,29 +14,40 @@ if (!isset($_SESSION['reg_step1'])) {
 }
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?php echo htmlspecialchars(csrfToken(), ENT_QUOTES, 'UTF-8'); ?>" />
-    <title>CYBER REGISTRATION - Neural Network Access</title>
+    <title>CYBER REGISTRATION - Security Verification</title>
+
+    <!-- Pre-render Theme Initialization (Prevents FOUC, defaults to Light) -->
+    <script>
+      (function() {
+        var theme = localStorage.getItem('auth_theme') || 'light';
+        document.documentElement.setAttribute('data-theme', theme);
+      })();
+    </script>
+
+    <!-- Modern Typography -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="../css/modern-design-system.css">
     <link rel="stylesheet" href="../css/cyberpunk-register.css">
     <style>
         select.cyber-input option {
-            background: white !important;
-            color: black !important;
+            background: var(--surface) !important;
+            color: var(--text) !important;
         }
     </style>
 </head>
 <body class="scroll-active">
-    <!-- Animated Background -->
-    <div class="cyber-grid"></div>
-    <div class="neon-particles"></div>
-    <div class="scan-lines"></div>
+    <!-- Animated Modern Ambient Background -->
+    <div class="cyber-grid" aria-hidden="true"></div>
+    <div class="neon-particles" aria-hidden="true"></div>
 
     <!-- Header -->
     <header class="cyber-header">
@@ -48,6 +59,13 @@ if (!isset($_SESSION['reg_step1'])) {
             <div class="header-actions">
                 <a href="login.php" class="cyber-link">LOGIN</a>
                 <a href="index.php" class="cyber-link">HOME</a>
+
+                <!-- Theme Toggle Switcher -->
+                <button type="button" class="theme-toggle-btn" id="themeToggleBtn" aria-label="Toggle theme" title="Toggle theme">
+                    <span class="theme-toggle-icon theme-toggle-sun">☀️</span>
+                    <span class="theme-toggle-icon theme-toggle-moon">🌙</span>
+                    <span class="theme-toggle-text">Dark</span>
+                </button>
             </div>
         </div>
     </header>
@@ -138,5 +156,6 @@ if (!isset($_SESSION['reg_step1'])) {
 
     <script src="../js/disable-rightclick.js"></script>
     <script src="../js/cyberpunk-security.js"></script>
+    <script src="../js/theme-toggle.js"></script>
 </body>
 </html>

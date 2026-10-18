@@ -8,30 +8,55 @@ if (!isset($_SESSION['user_id']) && $mode !== 'forgot') {
 }
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?php echo htmlspecialchars(csrfToken(), ENT_QUOTES, 'UTF-8'); ?>" />
-    <title>CYBER PASSWORD UPDATE - Neural Network Access</title>
+    <title>Change Password — CyberAuth System</title>
+
+    <!-- Pre-render Theme Initialization (Prevents FOUC, defaults to Light) -->
+    <script>
+      (function() {
+        var theme = localStorage.getItem('auth_theme') || 'light';
+        document.documentElement.setAttribute('data-theme', theme);
+      })();
+    </script>
+
+    <!-- Modern Typography -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="../css/modern-design-system.css">
     <link rel="stylesheet" href="../css/cyberpunk-change-password.css">
 </head>
 <body>
-    <!-- Animated Background -->
-    <div class="cyber-grid"></div>
-    <div class="neon-particles"></div>
-    <div class="scan-lines"></div>
+    <!-- Subtle Ambient Canvas -->
+    <div class="cyber-grid" aria-hidden="true"></div>
+    <div class="neon-particles" aria-hidden="true"></div>
 
     <!-- Header -->
     <header class="cyber-header">
         <div class="header-content">
-            <div class="logo-container">
+            <a href="index.php" class="logo-container">
                 <div class="logo-icon">⚡</div>
-                <div class="logo-text">NEURAL<span class="accent">NET</span></div>
+                <div class="logo-text">CYBER<span class="accent">AUTH</span></div>
+            </a>
+            <div class="header-actions">
+                <?php if (isset($_SESSION['user_id'])): ?>
+                    <a href="dashboard.php" class="nav-link cyber-link">DASHBOARD</a>
+                <?php else: ?>
+                    <a href="login.php" class="nav-link cyber-link">LOGIN</a>
+                <?php endif; ?>
+
+                <!-- Theme Toggle Switcher -->
+                <button type="button" class="theme-toggle-btn" id="themeToggleBtn" aria-label="Toggle theme" title="Toggle theme">
+                    <span class="theme-toggle-icon theme-toggle-sun">☀️</span>
+                    <span class="theme-toggle-icon theme-toggle-moon">🌙</span>
+                    <span class="theme-toggle-text">Dark</span>
+                </button>
             </div>
         </div>
     </header>
@@ -231,7 +256,6 @@ if (!isset($_SESSION['user_id']) && $mode !== 'forgot') {
 
     <script src="../js/disable-rightclick.js"></script>
     <script src="../js/cyberpunk-change-password.js?v=20251013"></script>
-    
-    <!-- Back button protection disabled during debugging -->
+    <script src="../js/theme-toggle.js"></script>
 </body>
 </html>

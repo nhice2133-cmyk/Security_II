@@ -5,12 +5,21 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     sendJsonResponse(false, 'Invalid request method');
 }
 
-$username = strtolower(sanitizeInput($_POST['username'] ?? ''));
-$password = $_POST['password'] ?? '';
+$csrfToken = $_POST['csrf_token'] ?? ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? null);
+if ($csrfToken !== null && !verifyCsrf($csrfToken)) {
+    sendJsonResponse(false, 'Invalid or expired session security token.');
+}
+
+$username = strtolower(trim(sanitizeInput($_POST['username'] ?? '')));
+$password = (string)($_POST['password'] ?? '');
 $remember = isset($_POST['remember']);
 
-if (empty($username) || empty($password)) {
+if ($username === '' || trim($password) === '') {
     sendJsonResponse(false, 'Username and password are required');
+}
+
+if (strlen($username) > 100 || strlen($password) > 255) {
+    sendJsonResponse(false, 'Input exceeds maximum allowed length');
 }
 
 $db = new Database();
@@ -83,8 +92,12 @@ if ($user['status'] === 'pending') {
     sendJsonResponse(false, 'Your account is pending admin approval.');
 }
 
-if ($user['status'] === 'blocked') {
-    sendJsonResponse(false, 'Your account has been blocked. Please contact an administrator.');
+if ($user['status'] === 'inactive' || (isset($user['is_active']) && (int)$user['is_active'] === 0)) {
+    sendJsonResponse(false, 'Your account is inactive. Please contact the current Superadmin to request reactivation.');
+}
+
+if ($user['status'] === 'suspended' || $user['status'] === 'blocked') {
+    sendJsonResponse(false, 'Your account has been suspended. Please contact an administrator.');
 }
 
 // ── Successful login: reset throttle counter ──────────────────────────────
@@ -163,6 +176,8 @@ $_SESSION['login_log_id']     = $logId;
 $_SESSION['login_time']       = time();
 $_SESSION['last_activity']    = time();
 $_SESSION['last_regeneration']= time();
+
+logActivity($user['id'], 'LOGIN', "User '{$user['username']}' logged in successfully");
 
 // Set remember me cookie if requested — use secure flag
 if ($remember) {

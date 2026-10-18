@@ -29,18 +29,18 @@ if ($_SESSION['role'] !== 'super_admin') {
     }
 }
 
-$currentPassword = $_POST['current_password'] ?? '';
-$newPassword = $_POST['new_password'] ?? '';
-$confirmNewPassword = $_POST['confirm_new_password'] ?? '';
+$currentPassword = (string)($_POST['current_password'] ?? '');
+$newPassword = (string)($_POST['new_password'] ?? '');
+$confirmNewPassword = (string)($_POST['confirm_new_password'] ?? '');
 
 // Validation
 $errors = [];
 
-if (empty($currentPassword)) {
+if (trim($currentPassword) === '') {
     $errors[] = 'Current password is required';
 }
 
-if (empty($newPassword)) {
+if (trim($newPassword) === '') {
     $errors[] = 'New password is required';
 } else {
     $pwdError = validatePassword($newPassword);
@@ -53,7 +53,7 @@ if ($newPassword !== $confirmNewPassword) {
     $errors[] = 'New passwords do not match';
 }
 
-if ($currentPassword === $newPassword) {
+if ($currentPassword !== '' && $currentPassword === $newPassword) {
     $errors[] = 'New password must be different from current password';
 }
 
@@ -64,7 +64,7 @@ if (!empty($errors)) {
 $db = new Database();
 
 // Get current user data
-$stmt = $db->prepare("SELECT password FROM users WHERE id = ? AND is_active = 1");
+$stmt = $db->prepare("SELECT id, username, password FROM users WHERE id = ?");
 $stmt->execute([$_SESSION['user_id']]);
 $user = $stmt->fetch();
 
@@ -84,6 +84,7 @@ $hashedNewPassword = hashPassword($newPassword);
 try {
     $stmt = $db->prepare("UPDATE users SET password = ?, updated_at = NOW() WHERE id = ?");
     $stmt->execute([$hashedNewPassword, $_SESSION['user_id']]);
+    logActivity($_SESSION['user_id'], 'PASSWORD_CHANGED', "User '{$user['username']}' updated their account password");
     // Keep session active; return success without forcing logout
     sendJsonResponse(true, 'Password updated successfully');
     

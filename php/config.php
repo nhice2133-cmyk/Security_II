@@ -113,30 +113,46 @@ function validateSession() {
         try {
             $dbV = new Database();
 
-            // 1. Check login_log closure and account status (covers blocking + session invalidation for all roles)
+            // 1. Check login_log closure and account status (covers blocking, suspension, deactivation + session invalidation for all roles)
             $rowStmt = $dbV->prepare(
-                "SELECT l.time_out, u.status FROM login_logs l JOIN users u ON l.user_id = u.id WHERE l.id = ?"
+                "SELECT l.time_out, u.status, u.is_active, u.role FROM login_logs l JOIN users u ON l.user_id = u.id WHERE l.id = ?"
             );
             $rowStmt->execute([$_SESSION['login_log_id']]);
             $row = $rowStmt->fetch(PDO::FETCH_ASSOC);
 
             if ($row) {
                 if ($row['time_out'] !== null) { endSession(); return false; }   // session closed
-                if ($row['status'] === 'blocked') { endSession(); return false; } // account blocked
+                // Check if account is blocked, suspended, or inactive
+                if (in_array($row['status'], ['blocked', 'suspended', 'inactive']) || (isset($row['is_active']) && (int)$row['is_active'] === 0)) {
+                    endSession(); 
+                    return false; 
+                } // account blocked/suspended/inactive
+
+                // Verify session role matches live DB role (prevents stale role in session after role demotion/transfer)
+                if (isset($_SESSION['role']) && $_SESSION['role'] !== $row['role']) {
+                    if ($_SESSION['role'] === 'super_admin' && $row['role'] !== 'super_admin') {
+                        endSession();
+                        return false;
+                    }
+                    $_SESSION['role'] = $row['role'];
+                }
+            } else {
+                endSession();
+                return false;
             }
 
-            // 2. Additional check for Super Admins: verify they still own the lock
+            // 2. Additional check for Super Admins: verify they still own the lock and match active_user_id
             if (isset($_SESSION['role']) && $_SESSION['role'] === 'super_admin') {
                 $lockStmt = $dbV->prepare(
-                    "SELECT login_log_id, expires_at FROM super_admin_lock WHERE id = 1"
+                    "SELECT active_user_id, login_log_id, expires_at FROM super_admin_lock WHERE id = 1"
                 );
                 $lockStmt->execute();
                 $lock = $lockStmt->fetch(PDO::FETCH_ASSOC);
 
                 if (!$lock) { endSession(); return false; } // lock row missing
 
-                // Their session must be the current lock holder
-                if ((int)$lock['login_log_id'] !== (int)$_SESSION['login_log_id']) {
+                // Their session must be the current lock holder AND user id must match
+                if ((int)$lock['login_log_id'] !== (int)$_SESSION['login_log_id'] || (int)$lock['active_user_id'] !== (int)$_SESSION['user_id']) {
                     endSession();
                     return false;
                 }
@@ -376,6 +392,144 @@ function validatePassword(string $password): ?string {
     return null; // valid
 }
 
+/**
+ * Validation helper: Name string validation according to required rules
+ */
+if (!function_exists('validateNameString')) {
+    function validateNameString(string $val, string $fieldName = 'Name', bool $isRequired = true, int $minLetters = 2): ?string {
+        if ($val === '') {
+            return $isRequired ? 'This field is required.' : null;
+        }
+        if (trim($val) === '') {
+            return 'This field is required.';
+        }
+        // Leading and trailing spaces
+        if (mb_substr($val, 0, 1) === ' ' || mb_substr($val, -1) === ' ') {
+            return 'Remove spaces at the beginning or end.';
+        }
+        // Consecutive spaces
+        if (preg_match('/ {2,}/', $val)) {
+            return 'Double spaces are not allowed.';
+        }
+        // Three consecutive identical characters (case-insensitive)
+        if (preg_match('/(.)\1\1/ui', $val)) {
+            return 'Three identical characters in a row are not allowed.';
+        }
+        // Capitalization: first character must be an uppercase letter
+        if (!preg_match('/^\p{Lu}/u', $val)) {
+            return 'The first letter must be capitalized.';
+        }
+        // Allowed characters: Unicode letters, combining marks, spaces, apostrophes (', \u2019), periods, hyphens
+        if (!preg_match('/^[\p{L}][\p{L}\p{M} \'\x{2019}.-]*$/u', $val)) {
+            return 'Please enter valid characters.';
+        }
+        // Word capitalization & capital letter count check:
+        // Every word should only contain 1 capital letter, and each word's first letter must be capitalized
+        $words = preg_split('/[\s\-_.\'\x{2019}]+/u', $val, -1, PREG_SPLIT_NO_EMPTY);
+        foreach ($words as $w) {
+            preg_match_all('/\p{L}/u', $w, $wLetters);
+            if (empty($wLetters[0])) {
+                continue;
+            }
+            if (!preg_match('/^\p{Lu}/u', $w)) {
+                return 'The first letter must be capitalized.';
+            }
+            preg_match_all('/\p{Lu}/u', $w, $caps);
+            if (count($caps[0]) > 1) {
+                return 'Each word must contain only 1 capital letter.';
+            }
+        }
+        // Minimum letters
+        preg_match_all('/\p{L}/u', $val, $letters);
+        if (count($letters[0] ?? []) < $minLetters) {
+            return 'Name must contain at least 2 letters.';
+        }
+        // Maximum 50 characters
+        if (mb_strlen($val, 'UTF-8') > 50) {
+            return 'Name must not exceed 50 characters.';
+        }
+        return null;
+    }
+}
+
+/**
+ * Validation helper: Location string (Barangay, City, Province, Country)
+ */
+if (!function_exists('validateLocationString')) {
+    function validateLocationString(string $val, string $fieldName = 'Location'): ?string {
+        if ($val === '' || trim($val) === '') {
+            return 'This field is required.';
+        }
+        if (mb_substr($val, 0, 1) === ' ' || mb_substr($val, -1) === ' ') {
+            return 'Remove spaces at the beginning or end.';
+        }
+        if (preg_match('/ {2,}/', $val)) {
+            return 'Double spaces are not allowed.';
+        }
+        if (preg_match('/(.)\1\1/ui', $val)) {
+            return 'Three identical characters in a row are not allowed.';
+        }
+        if (!preg_match('/^\p{Lu}/u', $val)) {
+            return 'The first letter must be capitalized.';
+        }
+        if (!preg_match('/^[\p{L}][\p{L}0-9\p{M} \'\x{2019}.-]*$/u', $val)) {
+            return 'Please enter valid characters.';
+        }
+        $words = preg_split('/[\s\-_.\'\x{2019}]+/u', $val, -1, PREG_SPLIT_NO_EMPTY);
+        foreach ($words as $w) {
+            preg_match_all('/\p{L}/u', $w, $wLetters);
+            if (empty($wLetters[0])) {
+                continue;
+            }
+            if (!preg_match('/^\p{Lu}/u', $w)) {
+                return 'The first letter must be capitalized.';
+            }
+            preg_match_all('/\p{Lu}/u', $w, $caps);
+            if (count($caps[0]) > 1) {
+                return 'Each word must contain only 1 capital letter.';
+            }
+        }
+        preg_match_all('/\p{L}/u', $val, $letters);
+        if (count($letters[0] ?? []) < 2) {
+            return "$fieldName must contain at least 2 letters.";
+        }
+        if (mb_strlen($val, 'UTF-8') > 50) {
+            return "$fieldName must not exceed 50 characters.";
+        }
+        return null;
+    }
+}
+
+/**
+ * Validation helper: Street address
+ */
+if (!function_exists('validateStreetAddress')) {
+    function validateStreetAddress(string $val): ?string {
+        if ($val === '' || trim($val) === '') {
+            return 'Purok / Street is required.';
+        }
+        if (mb_substr($val, 0, 1) === ' ' || mb_substr($val, -1) === ' ') {
+            return 'Remove spaces at the beginning or end.';
+        }
+        if (preg_match('/ {2,}/', $val)) {
+            return 'Double spaces are not allowed.';
+        }
+        if (preg_match('/(.)\1\1/ui', $val)) {
+            return 'Three identical characters in a row are not allowed.';
+        }
+        if (mb_strlen($val, 'UTF-8') < 2) {
+            return 'Address must contain at least 2 characters.';
+        }
+        if (mb_strlen($val, 'UTF-8') > 100) {
+            return 'Address must not exceed 100 characters.';
+        }
+        if (!preg_match('/^[\p{L}0-9\p{M} .,\/\'#\-]+$/u', $val)) {
+            return 'Please enter valid characters.';
+        }
+        return null;
+    }
+}
+
 // ── CSRF Protection Helpers ───────────────────────────────────────────────────
 
 /**
@@ -415,7 +569,51 @@ function requireCsrf(): void {
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Login attempt tracking functions removed - only client-side validation remains
+/**
+ * Log system activity to activity_logs table with full audit trail parameters
+ */
+function logActivity(
+    ?int $userId, 
+    string $action, 
+    ?string $details = null, 
+    ?string $ip = null,
+    ?int $targetUserId = null,
+    ?string $reason = null,
+    ?string $outcome = 'SUCCESS',
+    ?string $prevState = null,
+    ?string $newState = null
+): void {
+    try {
+        $db = new Database();
+        if ($ip === null) {
+            $ip = $_SERVER['REMOTE_ADDR'] ?? null;
+        }
+        $stmt = $db->prepare("
+            INSERT INTO activity_logs 
+            (user_id, target_user_id, action, details, reason, outcome, previous_state, new_state, ip_address, created_at) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+        ");
+        $stmt->execute([
+            $userId, 
+            $targetUserId, 
+            strtoupper($action), 
+            $details, 
+            $reason, 
+            strtoupper($outcome ?? 'SUCCESS'), 
+            $prevState, 
+            $newState, 
+            $ip
+        ]);
+    } catch (Exception $e) {
+        // Fallback for basic insert
+        try {
+            $stmt = $db->prepare("INSERT INTO activity_logs (user_id, action, details, ip_address, created_at) VALUES (?, ?, ?, ?, NOW())");
+            $stmt->execute([$userId, strtoupper($action), $details, $ip]);
+        } catch (Exception $e2) {
+            error_log("Failed to log activity: " . $e2->getMessage());
+        }
+    }
+}
 
 // Create database tables if they don't exist
 function createTables() {
@@ -427,10 +625,8 @@ function createTables() {
             id INT AUTO_INCREMENT PRIMARY KEY,
             username VARCHAR(50) UNIQUE NOT NULL,
             email VARCHAR(100) UNIQUE NOT NULL,
-            id_number VARCHAR(9) UNIQUE NULL,
+            id_number VARCHAR(20) UNIQUE NULL,
             password VARCHAR(255) NOT NULL,
-            security_question VARCHAR(255) NOT NULL,
-            security_answer VARCHAR(255) NOT NULL,
             phone_number VARCHAR(20) NULL,
             first_name VARCHAR(100) NULL,
             last_name VARCHAR(100) NULL,
@@ -444,21 +640,33 @@ function createTables() {
             city VARCHAR(100) NULL,
             province VARCHAR(100) NULL,
             country VARCHAR(100) NULL,
-            zip_code VARCHAR(4) NULL,
+            zip_code VARCHAR(10) NULL,
+            role ENUM('super_admin','admin','user') DEFAULT 'user',
+            status ENUM('active','inactive','suspended','pending','approved','blocked','pending_setup') DEFAULT 'pending',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            is_active BOOLEAN DEFAULT TRUE
+            is_active BOOLEAN DEFAULT TRUE,
+            is_former_superadmin BOOLEAN DEFAULT FALSE
         )
     ");
     
-    // Login attempts table removed - only client-side validation remains
+    // Superadmin Succession Logs table
+    $db->query("
+        CREATE TABLE IF NOT EXISTS superadmin_succession_logs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            outgoing_superadmin_id INT NOT NULL,
+            incoming_superadmin_id INT NOT NULL,
+            reason TEXT NOT NULL,
+            former_superadmin_status VARCHAR(20) NOT NULL DEFAULT 'active',
+            ip_address VARCHAR(45) NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_outgoing (outgoing_superadmin_id),
+            INDEX idx_incoming (incoming_superadmin_id),
+            INDEX idx_created (created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
     
     // Password reset tokens table
-    // NOTE: The expires_at column in password_reset_tokens must NOT use
-    // ON UPDATE CURRENT_TIMESTAMP — any row update would reset the expiry.
-    // Ensure it is defined as:
-    //   expires_at TIMESTAMP NOT NULL
-    // (without ON UPDATE CURRENT_TIMESTAMP)
     $db->query("
         CREATE TABLE IF NOT EXISTS password_reset_tokens (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -481,8 +689,31 @@ function createTables() {
         )
     ");
 
+    // Activity logs table for all system activity tracking
+    $db->query("
+        CREATE TABLE IF NOT EXISTS activity_logs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NULL,
+            target_user_id INT NULL,
+            action VARCHAR(50) NOT NULL,
+            details TEXT NULL,
+            reason TEXT NULL,
+            outcome VARCHAR(50) NOT NULL DEFAULT 'SUCCESS',
+            previous_state VARCHAR(255) NULL,
+            new_state VARCHAR(255) NULL,
+            ip_address VARCHAR(45) NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_act_user (user_id),
+            INDEX idx_act_target (target_user_id),
+            INDEX idx_act_action (action),
+            INDEX idx_act_created (created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+
     // Attempt to add new columns for existing installations
-    try { $db->query("ALTER TABLE users ADD COLUMN id_number VARCHAR(9) UNIQUE NULL"); } catch (Exception $e) { /* ignore if exists */ }
+    try { $db->query("ALTER TABLE users MODIFY COLUMN status ENUM('active','inactive','suspended','pending','approved','blocked','pending_setup') NOT NULL DEFAULT 'pending'"); } catch (Exception $e) { /* ignore */ }
+    try { $db->query("ALTER TABLE users ADD COLUMN is_former_superadmin BOOLEAN DEFAULT FALSE"); } catch (Exception $e) { /* ignore */ }
+    try { $db->query("ALTER TABLE users ADD COLUMN id_number VARCHAR(20) UNIQUE NULL"); } catch (Exception $e) { /* ignore if exists */ }
     try { $db->query("ALTER TABLE users ADD COLUMN address TEXT NULL"); } catch (Exception $e) { /* ignore if exists */ }
     try { $db->query("ALTER TABLE users ADD COLUMN profile_picture VARCHAR(255) NULL"); } catch (Exception $e) { /* ignore if exists */ }
     try { $db->query("ALTER TABLE users ADD COLUMN role VARCHAR(50) DEFAULT 'user'"); } catch (Exception $e) { /* ignore if exists */ }
@@ -505,7 +736,7 @@ function createTables() {
     try { $db->query("ALTER TABLE users ADD COLUMN city VARCHAR(100) NULL"); } catch (Exception $e) { /* ignore if exists */ }
     try { $db->query("ALTER TABLE users ADD COLUMN province VARCHAR(100) NULL"); } catch (Exception $e) { /* ignore if exists */ }
     try { $db->query("ALTER TABLE users ADD COLUMN country VARCHAR(100) NULL"); } catch (Exception $e) { /* ignore if exists */ }
-    try { $db->query("ALTER TABLE users ADD COLUMN zip_code VARCHAR(4) NULL"); } catch (Exception $e) { /* ignore if exists */ }
+    try { $db->query("ALTER TABLE users ADD COLUMN zip_code VARCHAR(10) NULL"); } catch (Exception $e) { /* ignore if exists */ }
 }
 
 // Initialize database tables only when explicitly requested via CLI / install script.

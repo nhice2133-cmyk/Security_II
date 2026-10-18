@@ -35,12 +35,12 @@ if ((int)$_SESSION['sq_attempts'] >= $maxAttempts) {
 }
 
 // ── Read answers (ignore any client-supplied idNumber) ────────────────────────
-$ans1 = trim($_POST['ans1'] ?? '');
-$ans2 = trim($_POST['ans2'] ?? '');
-$ans3 = trim($_POST['ans3'] ?? '');
+$ans1 = trim((string)($_POST['ans1'] ?? ''));
+$ans2 = trim((string)($_POST['ans2'] ?? ''));
+$ans3 = trim((string)($_POST['ans3'] ?? ''));
 
-if (empty($ans1) || empty($ans2) || empty($ans3)) {
-    sendJsonResponse(false, 'All answers are required');
+if ($ans1 === '' || $ans2 === '' || $ans3 === '') {
+    sendJsonResponse(false, 'All answers are required and cannot be whitespace only');
 }
 
 $db = new Database();

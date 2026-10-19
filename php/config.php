@@ -4,10 +4,24 @@ $envFile = __DIR__ . '/../.env';
 if (file_exists($envFile)) {
     $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
     foreach ($lines as $line) {
-        if (strpos(trim($line), '#') === 0) continue;
-        list($name, $value) = explode('=', $line, 2);
-        putenv(trim($name) . '=' . trim($value));
-        $_ENV[trim($name)] = trim($value);
+        $trimmed = trim($line);
+        if ($trimmed === '' || strpos($trimmed, '#') === 0) continue;
+        if (strpos($trimmed, '=') === false) continue;
+        list($name, $value) = explode('=', $trimmed, 2);
+        $name = trim($name);
+        $value = trim($value);
+        // Strip surrounding quotes if present
+        $valLen = strlen($value);
+        if ($valLen >= 2) {
+            $first = $value[0];
+            $last = $value[$valLen - 1];
+            if (($first === '"' && $last === '"') || ($first === "'" && $last === "'")) {
+                $value = substr($value, 1, -1);
+            }
+        }
+        putenv("{$name}={$value}");
+        $_ENV[$name] = $value;
+        $_SERVER[$name] = $value;
     }
 }
 
@@ -27,14 +41,25 @@ define('PASSWORD_MIN_LENGTH', 8);
 define('SESSION_TIMEOUT', 3600); // 1 hour
 // Login lockout: server-side throttling via login_attempts table (see php/login.php)
 
+// Helper to read environment variables reliably across PHP runtime configurations
+$_readEnv = function(string $key, string $default = ''): string {
+    if (isset($_ENV[$key]) && $_ENV[$key] !== '') return (string)$_ENV[$key];
+    if (isset($_SERVER[$key]) && $_SERVER[$key] !== '') return (string)$_SERVER[$key];
+    $val = getenv($key);
+    return ($val !== false && $val !== '') ? (string)$val : $default;
+};
+
 // Email Configuration (PHPMailer SMTP) — credentials loaded from environment variables
 // See .env.example for required variable names. Never hardcode credentials here.
-define('SMTP_HOST', getenv('SMTP_HOST') ?: 'smtp.gmail.com');
-define('SMTP_PORT', (int)(getenv('SMTP_PORT') ?: 587));
-define('SMTP_USERNAME', getenv('SMTP_USERNAME') ?: '');
-define('SMTP_PASSWORD', getenv('SMTP_PASSWORD') ?: '');
-define('FROM_EMAIL', getenv('FROM_EMAIL') ?: '');
-define('FROM_NAME', getenv('FROM_NAME') ?: 'CyberAuth System');
+define('SMTP_HOST', $_readEnv('SMTP_HOST', 'smtp.gmail.com'));
+define('SMTP_PORT', (int)($_readEnv('SMTP_PORT', '587')));
+define('SMTP_USERNAME', $_readEnv('SMTP_USERNAME', ''));
+define('SMTP_PASSWORD', $_readEnv('SMTP_PASSWORD', ''));
+define('FROM_EMAIL', $_readEnv('FROM_EMAIL', ''));
+define('FROM_NAME', $_readEnv('FROM_NAME', 'CyberAuth System'));
+
+// Load centralized mailer service
+require_once __DIR__ . '/mailer.php';
 
 // File Upload Configuration
 define('UPLOAD_MAX_SIZE', 5242880); // 5MB

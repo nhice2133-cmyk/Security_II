@@ -69,16 +69,17 @@ if (isset($_SESSION['user_id'])) {
       
       <div class="form-panel" id="step1" style="max-width: 600px; margin: 0 auto; padding: 2rem;">
         <h2 class="cyber-headline" style="text-align: center;">Forgot Password</h2>
-        <p class="cyber-lead" style="text-align: center; margin-bottom: 2rem;">Enter your registered ID Number to continue.</p>
+        <p class="cyber-lead" style="text-align: center; margin-bottom: 2rem;">Enter your registered ID Number or Email Address to receive a 6-digit verification code.</p>
 
         <form class="cyber-form" id="forgotPasswordForm" autocomplete="off">
           <div class="input-group">
-            <label class="cyber-label" for="idNumber">ID Number</label>
+            <label class="cyber-label" for="idNumber">ID Number or Email Address</label>
             <div class="input-container">
-              <input type="text" class="cyber-input" id="idNumber" name="idNumber" placeholder="XXXX-XXXX" required />
+              <input type="text" class="cyber-input" id="idNumber" name="idNumber" placeholder="e.g. 2026-0001 or user@example.com" required />
               <div class="input-glow"></div>
             </div>
             <div class="error-message" id="idNumberError" style="display:none; color: var(--cyber-error); margin-top: 5px;"></div>
+            <div class="success-message" id="idNumberSuccess" style="display:none; color: var(--cyber-accent, #00ffcc); margin-top: 8px; font-size: 0.9rem;"></div>
           </div>
 
           <div class="form-actions" style="margin-top: 1.5rem;">
@@ -95,22 +96,27 @@ if (isset($_SESSION['user_id'])) {
 
       <div class="form-panel" id="step2" style="display: none; max-width: 600px; margin: 0 auto; padding: 2rem;">
         <h2 class="cyber-headline" style="text-align: center;">Verify OTP</h2>
-        <p class="cyber-lead" style="text-align: center; margin-bottom: 2rem;">Enter the 6-digit pin sent to your email.</p>
+        <p class="cyber-lead" id="otpSubtitle" style="text-align: center; margin-bottom: 2rem;">Enter the 6-digit pin sent to your email.</p>
 
         <form class="cyber-form" id="otpForm" autocomplete="off">
           <div class="input-group">
-            <label class="cyber-label" for="otpCode">One Time Pin</label>
+            <label class="cyber-label" for="otpCode">One Time Pin (6 Digits)</label>
             <div class="input-container">
-              <input type="text" class="cyber-input" id="otpCode" name="otpCode" placeholder="123456" maxlength="6" required />
+              <input type="text" class="cyber-input" id="otpCode" name="otpCode" placeholder="123456" maxlength="6" inputmode="numeric" pattern="[0-9]*" required />
               <div class="input-glow"></div>
             </div>
             <div class="error-message" id="otpError" style="display:none; color: var(--cyber-error); margin-top: 5px;"></div>
+            <div class="success-message" id="otpSuccess" style="display:none; color: var(--cyber-accent, #00ffcc); margin-top: 8px; font-size: 0.9rem;"></div>
           </div>
           <div class="form-actions" style="margin-top: 1.5rem;">
             <button type="submit" class="cyber-btn" id="btnStep2">
               <div class="btn-glow"></div>
               <span class="btn-text">VERIFY OTP</span>
             </button>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; font-size: 0.85rem;">
+              <button type="button" class="cyber-link" id="btnResendOtp" style="background:none; border:none; cursor:pointer; color: var(--cyber-accent, #00ffcc);">🔄 Resend OTP Code</button>
+              <button type="button" class="cyber-link" id="btnBackToStep1" style="background:none; border:none; cursor:pointer; color: var(--cyber-muted, #8b949e);">← Change Account</button>
+            </div>
           </div>
         </form>
       </div>

@@ -1,85 +1,93 @@
 <?php
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\Exception;
+/**
+ * php/forgot-password-step1.php
+ *
+ * Initiates the password recovery workflow:
+ * 1. Accepts ID Number, registered Email, or Username
+ * 2. Looks up the active approved account
+ * 3. Enforces rate limiting
+ * 4. Generates a secure 6-digit OTP
+ * 5. Sends the OTP via PHPMailer (Gmail SMTP / Google App Password)
+ * 6. Stores the hashed/tracked OTP in the database
+ */
 
 require_once 'config.php';
-require __DIR__ . '/PHPMailer/src/Exception.php';
-require __DIR__ . '/PHPMailer/src/PHPMailer.php';
-require __DIR__ . '/PHPMailer/src/SMTP.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     sendJsonResponse(false, 'Invalid request method');
 }
 
-$idNumber = trim(sanitizeInput($_POST['idNumber'] ?? ''));
+$query = trim(sanitizeInput($_POST['idNumber'] ?? $_POST['query'] ?? ''));
 
-if ($idNumber === '') {
-    sendJsonResponse(false, 'ID Number is required');
+if ($query === '') {
+    sendJsonResponse(false, 'Please enter your ID Number, Email address, or Username.');
 }
 
-if (strlen($idNumber) > 50) {
-    sendJsonResponse(false, 'ID Number is invalid');
+if (strlen($query) > 100) {
+    sendJsonResponse(false, 'Input exceeds maximum allowed length.');
 }
 
 $db = new Database();
-$stmt = $db->prepare("SELECT id, email FROM users WHERE id_number = ? AND status = 'approved'");
-$stmt->execute([$idNumber]);
-$user = $stmt->fetch();
+
+// Search user by ID Number, Email, or Username
+$stmt = $db->prepare(
+    "SELECT id, id_number, username, email, first_name, last_name, status, is_active 
+     FROM users 
+     WHERE (id_number = ? OR LOWER(email) = LOWER(?) OR LOWER(username) = LOWER(?)) 
+     LIMIT 1"
+);
+$stmt->execute([$query, $query, $query]);
+$user = $stmt->fetch(PDO::FETCH_ASSOC);
 
 if (!$user) {
-    // Fail securely: return generic success to prevent user enumeration
-    sendJsonResponse(true, 'If the ID number exists in our system, an OTP has been sent.');
+    sendJsonResponse(false, 'No active account found matching the provided ID Number, Email, or Username.');
 }
 
-// Rate-limit: reject if a non-expired, unused OTP was issued within the last 60 seconds
+// Check account status
+if ($user['status'] !== 'approved' || (isset($user['is_active']) && (int)$user['is_active'] === 0)) {
+    sendJsonResponse(false, 'Your account is not active or approved. Please contact an administrator.');
+}
+
+if (empty($user['email']) || !validateEmail($user['email'])) {
+    sendJsonResponse(false, 'This account does not have a valid email address configured.');
+}
+
+// Rate-limiting: prevent requesting more than one OTP every 60 seconds
 $cooldownStmt = $db->prepare(
-    "SELECT id FROM otps WHERE user_id = ? AND used = 0 AND expires_at > NOW() AND created_at > DATE_SUB(NOW(), INTERVAL 60 SECOND) LIMIT 1"
+    "SELECT id FROM otps 
+     WHERE user_id = ? AND used = 0 AND expires_at > NOW() 
+       AND created_at > DATE_SUB(NOW(), INTERVAL 60 SECOND) 
+     LIMIT 1"
 );
 $cooldownStmt->execute([$user['id']]);
 if ($cooldownStmt->fetch()) {
-    // Return the same success message to prevent user-enumeration timing attacks
-    sendJsonResponse(true, 'If the ID number exists in our system, an OTP has been sent.');
+    sendJsonResponse(false, 'An OTP was recently requested. Please check your inbox or wait 60 seconds before requesting a new code.');
 }
 
-// Generate 6-digit OTP using cryptographically secure random
+// Generate 6-digit OTP code using cryptographically secure random_int
 $otpCode = sprintf("%06d", random_int(0, 999999));
 
-// Store OTP in database using MySQL time to prevent timezone mismatch
-$stmt = $db->prepare("INSERT INTO otps (user_id, otp_code, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 15 MINUTE))");
-$stmt->execute([$user['id'], $otpCode]);
+// Send the OTP email first
+$recipientName = trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? '')) ?: ($user['username'] ?? 'User');
+$sendResult = sendSystemOtpEmail($user['email'], $recipientName, $otpCode);
 
-// If SMTP credentials are not configured, log to PHP error log (NOT a web-accessible file)
-if (empty(SMTP_PASSWORD) || SMTP_PASSWORD === 'your-app-password') {
-    error_log("[CyberAuth OTP DEV] User ID {$user['id']} / Email: {$user['email']} — OTP: $otpCode");
-} else {
-    try {
-        $mail = new PHPMailer(true);
-        $mail->isSMTP();
-        $mail->Host       = SMTP_HOST;
-        $mail->SMTPAuth   = true;
-        $mail->Username   = SMTP_USERNAME;
-        $mail->Password   = SMTP_PASSWORD;
-        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->Port       = SMTP_PORT;
-
-        $mail->setFrom(FROM_EMAIL ?: 'noreply@localhost', FROM_NAME);
-        $mail->addAddress($user['email'], $user['first_name'] ?? 'User');
-
-        $mail->isHTML(true);
-        $mail->Subject = 'CyberAuth OTP Verification';
-        $mail->Body    = '<html><body>
-                            <h2>Neural Network Access Request</h2>
-                            <p>Your authorization code is: <strong>' . $otpCode . '</strong></p>
-                            <p>This code will expire in 15 minutes.</p>
-                          </body></html>';
-
-        $mail->send();
-    } catch (Exception $e) {
-        error_log("Message could not be sent. Mailer Error: {$mail->ErrorInfo}");
-        sendJsonResponse(false, 'Failed to send OTP email. Please check server configuration.');
-    }
+if (!$sendResult['success']) {
+    sendJsonResponse(false, 'Email sending failed: ' . $sendResult['error']);
 }
 
-sendJsonResponse(true, 'If the ID number exists in our system, an OTP has been sent.');
-?>
+// Mark previous unused OTPs as expired/used so only the newest OTP is valid
+$db->prepare("UPDATE otps SET used = 1 WHERE user_id = ? AND used = 0")->execute([$user['id']]);
 
+// Store the newly issued OTP in the database (valid for 15 minutes)
+$insStmt = $db->prepare(
+    "INSERT INTO otps (user_id, otp_code, expires_at, created_at) 
+     VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 15 MINUTE), NOW())"
+);
+$insStmt->execute([$user['id'], $otpCode]);
+
+$masked = maskEmail($user['email']);
+
+sendJsonResponse(true, "A 6-digit OTP has been sent to your registered email ({$masked}).", [
+    'idNumber'    => $user['id_number'],
+    'maskedEmail' => $masked,
+]);

@@ -70,19 +70,101 @@ document.addEventListener('DOMContentLoaded', () => {
         confirmNewPasswordInput.addEventListener('input', () => clearError('confirmNewPassword', 'resetError'));
     }
 
+    const otpSubtitle = document.getElementById('otpSubtitle');
+    const otpSuccess = document.getElementById('otpSuccess');
+    const btnResend = document.getElementById('btnResendOtp');
+    const btnBackToStep1 = document.getElementById('btnBackToStep1');
+    let resendCooldownTimer = null;
+
+    function startResendCooldown(seconds = 60) {
+        if (!btnResend) return;
+        clearInterval(resendCooldownTimer);
+        let remaining = seconds;
+        btnResend.disabled = true;
+        btnResend.style.opacity = '0.5';
+        btnResend.style.cursor = 'not-allowed';
+        btnResend.textContent = `🔄 Resend in ${remaining}s`;
+
+        resendCooldownTimer = setInterval(() => {
+            remaining--;
+            if (remaining <= 0) {
+                clearInterval(resendCooldownTimer);
+                btnResend.disabled = false;
+                btnResend.style.opacity = '1';
+                btnResend.style.cursor = 'pointer';
+                btnResend.textContent = '🔄 Resend OTP Code';
+            } else {
+                btnResend.textContent = `🔄 Resend in ${remaining}s`;
+            }
+        }, 1000);
+    }
+
+    // Back to Step 1
+    if (btnBackToStep1) {
+        btnBackToStep1.addEventListener('click', () => {
+            clearError('otpCode', 'otpError');
+            if (otpSuccess) otpSuccess.style.display = 'none';
+            step2.style.display = 'none';
+            step1.style.display = 'block';
+            if (idInput) idInput.focus();
+        });
+    }
+
+    // Resend OTP
+    if (btnResend) {
+        btnResend.addEventListener('click', async () => {
+            if (btnResend.disabled || !currentIdNumber) return;
+            clearError('otpCode', 'otpError');
+            if (otpSuccess) otpSuccess.style.display = 'none';
+
+            const originalText = btnResend.textContent;
+            btnResend.disabled = true;
+            btnResend.textContent = 'Sending...';
+
+            try {
+                const formData = new FormData();
+                formData.append('idNumber', currentIdNumber);
+                const response = await fetch('../php/forgot-password-step1.php', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    if (otpSuccess) {
+                        otpSuccess.textContent = data.message || 'A new OTP code has been sent to your email.';
+                        otpSuccess.style.display = 'block';
+                    }
+                    if (data.data?.maskedEmail && otpSubtitle) {
+                        otpSubtitle.textContent = `A 6-digit OTP code was sent to ${data.data.maskedEmail}. Enter it below:`;
+                    }
+                    startResendCooldown(60);
+                } else {
+                    showError('otpCode', 'otpError', data.message || 'Failed to resend OTP code.');
+                    btnResend.disabled = false;
+                    btnResend.textContent = originalText;
+                }
+            } catch (err) {
+                showError('otpCode', 'otpError', 'Network error. Please try again.');
+                btnResend.disabled = false;
+                btnResend.textContent = originalText;
+            }
+        });
+    }
+
     // Step 1: Request OTP
     form1.addEventListener('submit', async (e) => {
         e.preventDefault();
         const idNumber = idInput.value.trim();
 
         if (!idNumber) {
-            showError('idNumber', 'idNumberError', 'Please enter your ID Number');
+            showError('idNumber', 'idNumberError', 'Please enter your ID Number or Email Address');
             return;
         }
 
         const btn = document.getElementById('btnStep1');
         btn.disabled = true;
-        btn.textContent = 'SENDING...';
+        btn.textContent = 'SENDING OTP...';
 
         try {
             const formData = new FormData();
@@ -94,16 +176,26 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
             
             if (data.success) {
-                currentIdNumber = idNumber;
+                currentIdNumber = (data.data && data.data.idNumber) ? data.data.idNumber : idNumber;
                 clearError('idNumber', 'idNumberError');
+
+                if (otpSubtitle) {
+                    const masked = (data.data && data.data.maskedEmail) ? data.data.maskedEmail : 'your email';
+                    otpSubtitle.textContent = `A 6-digit verification code has been sent to ${masked}. Enter it below:`;
+                }
+
                 step1.style.display = 'none';
                 step2.style.display = 'block';
-                if (otpInput) otpInput.focus();
+                if (otpInput) {
+                    otpInput.value = '';
+                    otpInput.focus();
+                }
+                startResendCooldown(60);
             } else {
-                showError('idNumber', 'idNumberError', data.message || 'ID Number not found.');
+                showError('idNumber', 'idNumberError', data.message || 'ID Number or Email not found.');
             }
         } catch (error) {
-            showError('idNumber', 'idNumberError', 'System error occurred. Please try again.');
+            showError('idNumber', 'idNumberError', 'System error occurred. Please check server configuration.');
         } finally {
             btn.disabled = false;
             btn.textContent = 'SEND OTP';
@@ -141,6 +233,9 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (data.success) {
                 clearError('otpCode', 'otpError');
+                if (data.data && data.data.idNumber) {
+                    currentIdNumber = data.data.idNumber;
+                }
                 // Populate questions
                 document.getElementById('lblQ1').textContent = data.data.questions.q1;
                 document.getElementById('lblQ2').textContent = data.data.questions.q2;

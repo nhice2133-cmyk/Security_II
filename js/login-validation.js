@@ -245,6 +245,13 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function submitForm() {
+        // Clear previous alert box if any
+        const alertBox = document.getElementById('loginAlertBox');
+        if (alertBox) {
+            alertBox.style.display = 'none';
+            alertBox.innerHTML = '';
+        }
+
         // Show loading state with cyberpunk effects
         submitButton.classList.add('loading');
         submitButton.disabled = true;
@@ -271,14 +278,55 @@ document.addEventListener('DOMContentLoaded', function() {
                     window.location.href = 'dashboard.php';
                 }, 2000);
             } else {
-                // Error - show message and update attempts
-                showErrorMessage(data.message || 'AUTHENTICATION FAILED. Please try again.');
+                // Check if this failure is due to single-active Super Admin lock
+                if (data.data && (data.data.locked_by_other || data.data.locked)) {
+                    // Only show ONE warning in the form card — eliminate redundant top banner
+                    if (alertBox) {
+                        alertBox.innerHTML = `
+                            <div class="login-alert-banner alert-locked">
+                                <span class="login-alert-icon">🔒</span>
+                                <div class="login-alert-content">
+                                    <strong class="login-alert-title">Single Super Admin Active</strong>
+                                    <span class="login-alert-text">${escapeHtml(data.message || 'Another Super Admin is currently active. Only 1 Super Admin can be logged in at a time. Please try again after the current Super Admin logs out.')}</span>
+                                </div>
+                            </div>
+                        `;
+                        alertBox.style.display = 'block';
+                    }
+                    // Do not increment failed password attempts for valid credentials
+                    return;
+                }
+
+                // Ordinary failure (e.g. invalid credentials) - show message in alertBox
+                if (alertBox) {
+                    alertBox.innerHTML = `
+                        <div class="login-alert-banner alert-danger">
+                            <span class="login-alert-icon">⚠️</span>
+                            <div class="login-alert-content">
+                                <strong class="login-alert-title">Authentication Failed</strong>
+                                <span class="login-alert-text">${escapeHtml(data.message || 'Invalid username or password. Please try again.')}</span>
+                            </div>
+                        </div>
+                    `;
+                    alertBox.style.display = 'block';
+                }
                 updateLoginAttempts();
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            showErrorMessage('NEURAL NETWORK ERROR. Please try again.');
+            if (alertBox) {
+                alertBox.innerHTML = `
+                    <div class="login-alert-banner alert-danger">
+                        <span class="login-alert-icon">⚠️</span>
+                        <div class="login-alert-content">
+                            <strong class="login-alert-title">Network Error</strong>
+                            <span class="login-alert-text">Unable to connect to the authentication server. Please check your connection and try again.</span>
+                        </div>
+                    </div>
+                `;
+                alertBox.style.display = 'block';
+            }
         })
         .finally(() => {
             // Reset button state
@@ -488,63 +536,86 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    function escapeHtml(str) {
+        if (!str) return '';
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
     function showSuccessMessage(message) {
+        const existing = document.querySelector('.cyber-success-message');
+        if (existing) existing.remove();
+
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
         const messageDiv = document.createElement('div');
         messageDiv.className = 'cyber-success-message';
         messageDiv.textContent = message;
         messageDiv.style.cssText = `
             position: fixed;
-            top: 20px;
-            right: 20px;
-            background: linear-gradient(45deg, #00ff00, #00ffff);
-            color: #000;
-            padding: 15px 20px;
-            border-radius: 8px;
+            top: 24px;
+            right: 24px;
+            max-width: 440px;
+            background: ${isDark ? '#1e293b' : '#ffffff'};
+            color: ${isDark ? '#34d399' : '#065f46'};
+            border: 1px solid ${isDark ? 'rgba(52, 211, 153, 0.3)' : 'rgba(16, 185, 129, 0.22)'};
+            border-left: 4px solid ${isDark ? '#34d399' : '#047857'};
+            padding: 12px 18px;
+            border-radius: 10px;
             z-index: 10000;
-            font-family: 'Orbitron', monospace;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            box-shadow: 0 0 30px rgba(0, 255, 0, 0.5);
-            animation: cyber-success-slide 0.5s ease-out;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.86rem;
+            font-weight: 600;
+            line-height: 1.45;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         `;
         document.body.appendChild(messageDiv);
         
         setTimeout(() => {
-            messageDiv.style.animation = 'cyber-success-slide-out 0.5s ease-in forwards';
+            messageDiv.style.opacity = '0';
+            messageDiv.style.transform = 'translateY(-8px)';
             setTimeout(() => {
                 messageDiv.remove();
-            }, 500);
+            }, 300);
         }, 3000);
     }
 
     function showErrorMessage(message) {
+        const existing = document.querySelector('.cyber-error-message');
+        if (existing) existing.remove();
+
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
         const messageDiv = document.createElement('div');
         messageDiv.className = 'cyber-error-message';
         messageDiv.textContent = message;
         messageDiv.style.cssText = `
             position: fixed;
-            top: 20px;
-            right: 20px;
-            background: linear-gradient(45deg, #ff0040, #ff0080);
-            color: #fff;
-            padding: 15px 20px;
-            border-radius: 8px;
+            top: 24px;
+            right: 24px;
+            max-width: 440px;
+            background: ${isDark ? '#1e293b' : '#ffffff'};
+            color: ${isDark ? '#f87171' : '#991b1b'};
+            border: 1px solid ${isDark ? 'rgba(248, 113, 113, 0.3)' : '#fecaca'};
+            border-left: 4px solid #ef4444;
+            padding: 12px 18px;
+            border-radius: 10px;
             z-index: 10000;
-            font-family: 'Orbitron', monospace;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            box-shadow: 0 0 30px rgba(255, 0, 64, 0.5);
-            animation: cyber-error-slide 0.5s ease-out;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.86rem;
+            font-weight: 600;
+            line-height: 1.45;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         `;
         document.body.appendChild(messageDiv);
         
         setTimeout(() => {
-            messageDiv.style.animation = 'cyber-error-slide-out 0.5s ease-in forwards';
+            messageDiv.style.opacity = '0';
+            messageDiv.style.transform = 'translateY(-8px)';
             setTimeout(() => {
                 messageDiv.remove();
-            }, 500);
+            }, 300);
         }, 5000);
     }
 
@@ -556,9 +627,9 @@ document.addEventListener('DOMContentLoaded', function() {
 function getEyeSVG(isVisible) {
     const stroke = isVisible ? '#ff00ff' : '#00eaff';
     const glow = isVisible ? 'rgba(255,0,255,0.6)' : 'rgba(0,234,255,0.6)';
-    const slash = isVisible ? '<path d="M3 3L21 21"></path>' : '';
+    const slash = isVisible ? '<line x1="3" y1="3" x2="21" y2="21" stroke-width="2"></line>' : '';
     return `
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 0 6px ${glow});">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 0 6px ${glow}); pointer-events: none; display: block;">
         <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"></path>
         <circle cx="12" cy="12" r="3"></circle>
         ${slash}

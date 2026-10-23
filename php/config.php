@@ -25,6 +25,9 @@ if (file_exists($envFile)) {
     }
 }
 
+// Set system timezone to match local server/database time
+date_default_timezone_set('Asia/Singapore');
+
 // Database Configuration
 define('DB_HOST', 'localhost');
 define('DB_USER', 'root');
@@ -39,6 +42,7 @@ define('APP_URL', 'http://localhost/v2');
 // Security Configuration
 define('PASSWORD_MIN_LENGTH', 8);
 define('SESSION_TIMEOUT', 3600); // 1 hour
+define('SUPERADMIN_LOCK_TIMEOUT', 120); // 2 minutes rolling lock timeout for single-active Super Admin
 // Login lockout: server-side throttling via login_attempts table (see php/login.php)
 
 // Helper to read environment variables reliably across PHP runtime configurations
@@ -169,7 +173,7 @@ function validateSession() {
             // 2. Additional check for Super Admins: verify they still own the lock and match active_user_id
             if (isset($_SESSION['role']) && $_SESSION['role'] === 'super_admin') {
                 $lockStmt = $dbV->prepare(
-                    "SELECT active_user_id, login_log_id, expires_at FROM super_admin_lock WHERE id = 1"
+                    "SELECT active_user_id, login_log_id, expires_at, (expires_at IS NOT NULL AND expires_at < NOW()) AS is_expired FROM super_admin_lock WHERE id = 1"
                 );
                 $lockStmt->execute();
                 $lock = $lockStmt->fetch(PDO::FETCH_ASSOC);
@@ -183,7 +187,8 @@ function validateSession() {
                 }
 
                 // Lock must not have expired
-                if ($lock['expires_at'] !== null && strtotime($lock['expires_at']) < time()) {
+                $isLockExpired = ($lock['is_expired'] == 1 || ($lock['expires_at'] !== null && strtotime($lock['expires_at']) < time()));
+                if ($isLockExpired) {
                     // Stale lock — release and kick out
                     $dbV->prepare(
                         "UPDATE super_admin_lock SET active_user_id=NULL, login_log_id=NULL, acquired_at=NULL, expires_at=NULL WHERE id=1"
@@ -195,7 +200,7 @@ function validateSession() {
                 // Refresh the lock expiry so active admins don't get auto-kicked
                 $dbV->prepare(
                     "UPDATE super_admin_lock SET expires_at = DATE_ADD(NOW(), INTERVAL ? SECOND) WHERE id = 1"
-                )->execute([SESSION_TIMEOUT]);
+                )->execute([SUPERADMIN_LOCK_TIMEOUT]);
             }
 
         } catch (Exception $e) {
@@ -301,6 +306,18 @@ function requireAuth404() {
 
 function endSession() {
     if (session_status() === PHP_SESSION_ACTIVE) {
+        // Release super_admin_lock if this session owned it
+        if (isset($_SESSION['role']) && $_SESSION['role'] === 'super_admin' && isset($_SESSION['login_log_id'])) {
+            try {
+                $dbRelease = new Database();
+                $dbRelease->prepare(
+                    "UPDATE super_admin_lock SET active_user_id=NULL, login_log_id=NULL, acquired_at=NULL, expires_at=NULL
+                     WHERE login_log_id = ? OR active_user_id = ?"
+                )->execute([$_SESSION['login_log_id'], $_SESSION['user_id'] ?? 0]);
+                $dbRelease->prepare("UPDATE login_logs SET time_out=NOW() WHERE id=? AND time_out IS NULL")
+                          ->execute([$_SESSION['login_log_id']]);
+            } catch (Exception $e) { /* non-fatal */ }
+        }
         $_SESSION = [];
         if (ini_get('session.use_cookies')) {
             $params = session_get_cookie_params();
@@ -415,6 +432,42 @@ function validatePassword(string $password): ?string {
         return 'Password must contain at least one special character.';
     }
     return null; // valid
+}
+
+/**
+ * Generates an 8-character random password containing:
+ * - Exactly 8 characters
+ * - 1 uppercase letter
+ * - 1 special character
+ * - 1 number
+ * - 5 lowercase letters
+ * Randomly shuffled using Fisher-Yates and random_int
+ */
+function generateRandom8CharPassword(): string {
+    $uppers = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    $lowers = 'abcdefghjkmnpqrstuvwxyz';
+    $digits = '23456789';
+    $specials = '!@#$%&*?';
+
+    $chars = [
+        $uppers[random_int(0, strlen($uppers) - 1)],
+        $specials[random_int(0, strlen($specials) - 1)],
+        $digits[random_int(0, strlen($digits) - 1)],
+    ];
+
+    for ($i = 0; $i < 5; $i++) {
+        $chars[] = $lowers[random_int(0, strlen($lowers) - 1)];
+    }
+
+    // Fisher-Yates shuffle with cryptographic random_int
+    for ($i = count($chars) - 1; $i > 0; $i--) {
+        $j = random_int(0, $i);
+        $tmp = $chars[$i];
+        $chars[$i] = $chars[$j];
+        $chars[$j] = $tmp;
+    }
+
+    return implode('', $chars);
 }
 
 /**

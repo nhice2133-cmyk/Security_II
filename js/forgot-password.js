@@ -236,10 +236,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (data.data && data.data.idNumber) {
                     currentIdNumber = data.data.idNumber;
                 }
+                // Format & decode security questions to prevent raw HTML entities like &#039;
+                function formatSecurityQuestion(q) {
+                    if (!q) return '';
+                    const map = {
+                        'best_friend_elementary': "Who is your best friend in Elementary?",
+                        'favorite_pet': "What is the name of your favorite pet?",
+                        'favorite_teacher': "Who is your favorite teacher in high school?",
+                        'mother_maiden_name': "What is your mother's maiden name?",
+                        'birth_city': "In what city were you born?",
+                        'first_car': "What was the make and model of your first car?"
+                    };
+                    if (map[q]) return map[q];
+                    const doc = new DOMParser().parseFromString(q, 'text/html');
+                    return doc.body.textContent || q;
+                }
+
                 // Populate questions
-                document.getElementById('lblQ1').textContent = data.data.questions.q1;
-                document.getElementById('lblQ2').textContent = data.data.questions.q2;
-                document.getElementById('lblQ3').textContent = data.data.questions.q3;
+                document.getElementById('lblQ1').textContent = formatSecurityQuestion(data.data.questions.q1);
+                document.getElementById('lblQ2').textContent = formatSecurityQuestion(data.data.questions.q2);
+                document.getElementById('lblQ3').textContent = formatSecurityQuestion(data.data.questions.q3);
                 
                 step2.style.display = 'none';
                 step3.style.display = 'block';

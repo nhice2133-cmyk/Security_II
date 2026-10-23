@@ -30,6 +30,19 @@ $secStmt = $db->prepare("SELECT question1, answer1, question2, answer2, question
 $secStmt->execute([$_SESSION['user_id']]);
 $secQuestions = $secStmt->fetch() ?: [];
 
+$secQuestionMap = [
+    'best_friend_elementary' => "Who is your best friend in Elementary?",
+    'favorite_pet'           => "What is the name of your favorite pet?",
+    'favorite_teacher'       => "Who is your favorite teacher in high school?",
+    'mother_maiden_name'     => "What is your mother's maiden name?",
+    'birth_city'             => "In what city were you born?",
+    'first_car'              => "What was the make and model of your first car?"
+];
+$formatSecQ = function(?string $q) use ($secQuestionMap): string {
+    if (!$q) return '';
+    return $secQuestionMap[$q] ?? htmlspecialchars_decode($q, ENT_QUOTES | ENT_HTML5);
+};
+
 $fullNameParts = array_filter([$user['first_name'] ?? '', $user['middle_name'] ?? '', $user['last_name'] ?? '', $user['extension'] ?? ''], fn($p) => trim((string)$p) !== '');
 $displayName = !empty($fullNameParts) ? implode(' ', $fullNameParts) : $user['username'];
 $firstInitial = strtoupper(substr($user['first_name'] ?: $user['username'] ?: 'U', 0, 1));
@@ -56,17 +69,61 @@ $dashStats = $dashStatsStmt->fetch(PDO::FETCH_ASSOC) ?: [
 $pendingDelStmt = $db->query("SELECT COUNT(*) FROM delete_requests WHERE status = 'pending'");
 $pendingDelCount = (int)$pendingDelStmt->fetchColumn();
 
-$todayLogsStmt = $db->query("SELECT COUNT(*) FROM activity_logs WHERE DATE(created_at) = CURDATE()");
-$todayLogsCount = (int)$todayLogsStmt->fetchColumn();
+// ── Activity Logs Telemetry Computations (Role-Isolated) ────────────────────
+if ($role === 'user') {
+    $todayLogsStmt = $db->prepare("
+        SELECT COUNT(*) FROM activity_logs a
+        LEFT JOIN users u ON a.user_id = u.id
+        LEFT JOIN users tu ON a.target_user_id = tu.id
+        WHERE DATE(a.created_at) = CURDATE() AND a.user_id = ? AND (u.role != 'super_admin' OR u.role IS NULL) AND (tu.role != 'super_admin' OR tu.role IS NULL) AND a.action NOT LIKE 'SUPERADMIN_%'
+    ");
+    $todayLogsStmt->execute([$_SESSION['user_id']]);
+    $todayLogsCount = (int)$todayLogsStmt->fetchColumn();
 
-$recentLogsStmt = $db->query("
-    SELECT a.id, a.action, a.details, a.created_at, u.username, u.first_name, u.last_name, u.role
-    FROM activity_logs a
-    LEFT JOIN users u ON a.user_id = u.id
-    ORDER BY a.id DESC
-    LIMIT 6
-");
-$dashRecentLogs = $recentLogsStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $recentLogsStmt = $db->prepare("
+        SELECT a.id, a.action, a.details, a.created_at, u.username, u.first_name, u.last_name, u.role
+        FROM activity_logs a
+        LEFT JOIN users u ON a.user_id = u.id
+        LEFT JOIN users tu ON a.target_user_id = tu.id
+        WHERE a.user_id = ? AND (u.role != 'super_admin' OR u.role IS NULL) AND (tu.role != 'super_admin' OR tu.role IS NULL) AND a.action NOT LIKE 'SUPERADMIN_%'
+        ORDER BY a.id DESC
+        LIMIT 6
+    ");
+    $recentLogsStmt->execute([$_SESSION['user_id']]);
+    $dashRecentLogs = $recentLogsStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+} elseif ($role === 'admin') {
+    $todayLogsStmt = $db->query("
+        SELECT COUNT(*) FROM activity_logs a
+        LEFT JOIN users u ON a.user_id = u.id
+        LEFT JOIN users tu ON a.target_user_id = tu.id
+        WHERE DATE(a.created_at) = CURDATE() AND (u.role != 'super_admin' OR u.role IS NULL) AND (tu.role != 'super_admin' OR tu.role IS NULL) AND a.action NOT LIKE 'SUPERADMIN_%'
+    ");
+    $todayLogsCount = (int)$todayLogsStmt->fetchColumn();
+
+    $recentLogsStmt = $db->query("
+        SELECT a.id, a.action, a.details, a.created_at, u.username, u.first_name, u.last_name, u.role
+        FROM activity_logs a
+        LEFT JOIN users u ON a.user_id = u.id
+        LEFT JOIN users tu ON a.target_user_id = tu.id
+        WHERE (u.role != 'super_admin' OR u.role IS NULL) AND (tu.role != 'super_admin' OR tu.role IS NULL) AND a.action NOT LIKE 'SUPERADMIN_%'
+        ORDER BY a.id DESC
+        LIMIT 6
+    ");
+    $dashRecentLogs = $recentLogsStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+} else {
+    // super_admin sees all logs
+    $todayLogsStmt = $db->query("SELECT COUNT(*) FROM activity_logs WHERE DATE(created_at) = CURDATE()");
+    $todayLogsCount = (int)$todayLogsStmt->fetchColumn();
+
+    $recentLogsStmt = $db->query("
+        SELECT a.id, a.action, a.details, a.created_at, u.username, u.first_name, u.last_name, u.role
+        FROM activity_logs a
+        LEFT JOIN users u ON a.user_id = u.id
+        ORDER BY a.id DESC
+        LIMIT 6
+    ");
+    $dashRecentLogs = $recentLogsStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+}
 ?>
 <!DOCTYPE html>
 <html lang="en" data-theme="light">
@@ -92,9 +149,9 @@ $dashRecentLogs = $recentLogsStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
   <!-- Design System & Stylesheets -->
   <link rel="stylesheet" href="../css/modern-design-system.css?v=<?= filemtime(__DIR__ . '/../css/modern-design-system.css') ?>" />
-  <link rel="stylesheet" href="../css/cyberpunk-login.css" />
-  <link rel="stylesheet" href="../css/cyberpunk-portal.css" />
-  <link rel="stylesheet" href="../css/cyberpunk-register.css" />
+  <link rel="stylesheet" href="../css/cyberpunk-login.css?v=<?= filemtime(__DIR__ . '/../css/cyberpunk-login.css') ?>" />
+  <link rel="stylesheet" href="../css/cyberpunk-portal.css?v=<?= filemtime(__DIR__ . '/../css/cyberpunk-portal.css') ?>" />
+  <link rel="stylesheet" href="../css/cyberpunk-register.css?v=<?= filemtime(__DIR__ . '/../css/cyberpunk-register.css') ?>" />
   <style>
     html {
       overflow-y: scroll;
@@ -203,12 +260,12 @@ $dashRecentLogs = $recentLogsStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
       display: inline-flex;
       align-items: center;
       gap: 0.4rem;
-      padding: 0.3rem 0.75rem;
+      padding: 0.32rem 0.75rem;
       border: 1px solid var(--success-border);
       background: var(--success-light);
       border-radius: 9999px;
       color: var(--success);
-      font-weight: 700;
+      font-weight: 600;
       font-size: 0.76rem;
       letter-spacing: 0.03em;
       text-transform: uppercase;
@@ -717,6 +774,171 @@ $dashRecentLogs = $recentLogsStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
     .sa-badge-active  { background: var(--success-light); color: var(--success); border: 1px solid var(--success-border); }
     .sa-badge-offline { background: var(--bg-surface-hover); color: var(--text-dim); border: 1px solid var(--border-color); }
     .sa-badge-you     { background: var(--primary-light); color: var(--primary); border: 1px solid var(--primary-border); }
+    .ca-priv-preset-btn {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      font-size: 0.74rem;
+      font-weight: 600;
+      padding: 0.22rem 0.55rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .ca-priv-preset-btn:hover {
+      background: var(--bg-surface-hover);
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+    .ca-pw-toggle-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 4px 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+      transition: color 0.2s;
+    }
+    .ca-pw-toggle-btn:hover {
+      color: var(--primary);
+    }
+    .ca-modal-container {
+      max-height: 90vh !important;
+      display: flex !important;
+      flex-direction: column !important;
+    }
+    .ca-modal-body {
+      overflow-y: auto !important;
+      max-height: calc(90vh - 90px) !important;
+      scrollbar-gutter: stable;
+    }
+    .ca-step-indicator-bar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.6rem;
+      margin-bottom: 1.15rem;
+      padding: 0.45rem 0.75rem;
+      background: var(--bg-surface-subtle);
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+    }
+    .ca-step-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      padding: 0.28rem 0.75rem;
+      border-radius: 8px;
+      transition: all 0.2s ease;
+      user-select: none;
+    }
+    .ca-step-num {
+      width: 19px;
+      height: 19px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.72rem;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+    }
+    .ca-step-badge.active {
+      background: var(--primary-light, rgba(0, 234, 255, 0.12));
+      color: var(--primary, #00eaff);
+      border: 1px solid var(--primary-border, rgba(0, 234, 255, 0.3));
+    }
+    .ca-step-badge.active .ca-step-num {
+      background: var(--primary);
+      color: #ffffff;
+      font-weight: 700;
+      border-color: var(--primary);
+    }
+    .ca-step-badge.completed {
+      color: var(--success, #047857);
+      cursor: pointer;
+    }
+    .ca-step-badge.completed .ca-step-num {
+      background: var(--success);
+      color: #fff;
+      border-color: var(--success);
+    }
+    .ca-step-arrow {
+      color: var(--text-dim);
+      font-size: 0.8rem;
+    }
+    .ca-step-page {
+      animation: caFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .ca-modal-body::-webkit-scrollbar {
+      width: 6px;
+    }
+    .ca-modal-body::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.1);
+      border-radius: 4px;
+    }
+    .ca-modal-body::-webkit-scrollbar-thumb {
+      background: var(--primary);
+      border-radius: 4px;
+    }
+
+    /* ── Dark Mode High-Contrast Overrides ── */
+    [data-theme="dark"] .tab-btn.active {
+      color: #ffffff !important;
+      background: rgba(99, 102, 241, 0.25) !important;
+      border-color: rgba(99, 102, 241, 0.45) !important;
+    }
+    [data-theme="dark"] .tab-btn.active .tab-btn-icon {
+      color: #ffffff !important;
+    }
+    [data-theme="dark"] .tab-btn:hover {
+      color: #ffffff !important;
+    }
+    [data-theme="dark"] .tab-btn:hover .tab-btn-icon {
+      color: #ffffff !important;
+    }
+    [data-theme="dark"] .ca-step-badge.active {
+      color: #ffffff !important;
+      background: rgba(99, 102, 241, 0.25) !important;
+      border-color: rgba(99, 102, 241, 0.5) !important;
+    }
+    [data-theme="dark"] .ca-step-badge.active .ca-step-num {
+      background: #6366f1 !important;
+      color: #ffffff !important;
+      border-color: #818cf8 !important;
+    }
+    [data-theme="dark"] .ca-step-badge {
+      color: #cbd5e1 !important;
+    }
+    [data-theme="dark"] .ca-step-arrow {
+      color: #94a3b8 !important;
+    }
+    [data-theme="dark"] .cyber-pagination-summary .cyber-page-num {
+      color: #ffffff !important;
+    }
+    [data-theme="dark"] .sa-badge-you {
+      color: #ffffff !important;
+      background: rgba(99, 102, 241, 0.25) !important;
+      border-color: rgba(99, 102, 241, 0.45) !important;
+    }
+    [data-theme="dark"] .ca-priv-preset-btn:hover {
+      color: #ffffff !important;
+      border-color: rgba(255, 255, 255, 0.35) !important;
+    }
+    [data-theme="dark"] .ca-pw-toggle-btn:hover {
+      color: #ffffff !important;
+    }
+    [data-theme="dark"] #caStep2Avatar {
+      color: #ffffff !important;
+      background: rgba(99, 102, 241, 0.25) !important;
+      border-color: rgba(99, 102, 241, 0.45) !important;
+    }
   </style>
 </head>
 <body>
@@ -732,7 +954,7 @@ $dashRecentLogs = $recentLogsStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
       </a>
       <div class="header-actions">
         <span class="badge" style="font-size:0.75rem;">ROLE: <?= strtoupper(str_replace('_', ' ', $role)) ?></span>
-        <a href="../php/logout.php" class="nav-link cyber-link">LOGOUT</a>
+        <a href="#" onclick="openLogoutConfirmModal(); return false;" class="nav-link cyber-link" id="navLogoutBtn">LOGOUT</a>
 
         <!-- Theme Toggle Switcher -->
         <button type="button" class="theme-toggle-btn" id="themeToggleBtn" aria-label="Toggle theme" title="Toggle theme">
@@ -875,8 +1097,8 @@ if (!is_array($privs)) $privs = [];
                 </div>
                 <div>
                   <div class="dash-metric-val" id="dashTodayLogs" style="color:var(--accent);"><?= $todayLogsCount ?></div>
-                  <div class="dash-metric-label">Events Logged Today</div>
-                  <div class="dash-metric-desc">Real-time audit security trail</div>
+                  <div class="dash-metric-label"><?= $role === 'user' ? 'My Events Today' : 'Events Logged Today' ?></div>
+                  <div class="dash-metric-desc"><?= $role === 'user' ? 'Your personal activity trail' : 'Real-time audit security trail' ?></div>
                 </div>
               </div>
             </div>
@@ -1009,7 +1231,7 @@ if (!is_array($privs)) $privs = [];
                   <div class="dash-card-header">
                     <div class="dash-card-title">
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="color:var(--accent);"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
-                      <span>Recent Activity Audit</span>
+                      <span><?= $role === 'user' ? 'My Recent Activity' : 'Recent Activity Audit' ?></span>
                     </div>
                     <a class="dash-card-link" onclick="showTab('logs')">
                       <span>View All Logs</span>
@@ -1302,7 +1524,7 @@ if (!is_array($privs)) $privs = [];
                   <div class="form-grid-2" style="margin-bottom: 0.9rem;">
                     <div class="field-group">
                       <label class="field-label">QUESTION 1</label>
-                      <input type="text" class="custom-input" value="<?= htmlspecialchars($secQuestions['question1'] ?? 'What is your mother\'s maiden name?') ?>" readonly>
+                      <input type="text" class="custom-input" value="<?= htmlspecialchars($formatSecQ($secQuestions['question1'] ?? null) ?: 'What is your mother\'s maiden name?') ?>" readonly>
                     </div>
                     <div class="field-group">
                       <label class="field-label">ANSWER 1 (MASKED)</label>
@@ -1313,7 +1535,7 @@ if (!is_array($privs)) $privs = [];
                   <div class="form-grid-2" style="margin-bottom: 0.9rem;">
                     <div class="field-group">
                       <label class="field-label">QUESTION 2</label>
-                      <input type="text" class="custom-input" value="<?= htmlspecialchars($secQuestions['question2'] ?? 'What was the name of your first pet?') ?>" readonly>
+                      <input type="text" class="custom-input" value="<?= htmlspecialchars($formatSecQ($secQuestions['question2'] ?? null) ?: 'What was the name of your first pet?') ?>" readonly>
                     </div>
                     <div class="field-group">
                       <label class="field-label">ANSWER 2 (MASKED)</label>
@@ -1324,7 +1546,7 @@ if (!is_array($privs)) $privs = [];
                   <div class="form-grid-2">
                     <div class="field-group">
                       <label class="field-label">QUESTION 3</label>
-                      <input type="text" class="custom-input" value="<?= htmlspecialchars($secQuestions['question3'] ?? 'What is the name of the city where you were born?') ?>" readonly>
+                      <input type="text" class="custom-input" value="<?= htmlspecialchars($formatSecQ($secQuestions['question3'] ?? null) ?: 'What is the name of the city where you were born?') ?>" readonly>
                     </div>
                     <div class="field-group">
                       <label class="field-label">ANSWER 3 (MASKED)</label>
@@ -1371,7 +1593,6 @@ if (!is_array($privs)) $privs = [];
                 <option value="">All Statuses</option>
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
-                <option value="suspended">Suspended</option>
                 <option value="pending">Pending</option>
               </select>
               <button type="submit" class="btn-small">Filter</button>
@@ -1547,175 +1768,360 @@ if (!is_array($privs)) $privs = [];
         </button>
       </div>
 
-      <!-- Modal Body (One Section Card) -->
+      <!-- Modal Body (Two-Step Wizard Flow) -->
       <div class="ca-modal-body">
+        <!-- Step Indicator Bar -->
+        <div class="ca-step-indicator-bar" id="caStepIndicatorBar">
+          <div class="ca-step-badge active" id="caStepBadge1" onclick="goToCreateAccountStep(1)">
+            <span class="ca-step-num" id="caStepNum1">1</span>
+            <span id="caStepLabel1">Account Credentials</span>
+          </div>
+          <span class="ca-step-arrow" aria-hidden="true">➔</span>
+          <div class="ca-step-badge" id="caStepBadge2" onclick="goToCreateAccountStep(2)">
+            <span class="ca-step-num" id="caStepNum2">2</span>
+            <span id="caStepLabel2">Privileges &amp; Permissions</span>
+          </div>
+        </div>
+
         <form id="createAccountForm" onsubmit="submitCreateAccountForm(event)" novalidate>
-          <div class="ca-section-card">
-            <!-- Section Header Row -->
-            <div class="ca-section-header">
-              <div class="ca-section-title">
-                <!-- lock icon -->
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          <!-- Step 1 Page: Account Credentials & Access -->
+          <div id="caStep1Page" class="ca-step-page">
+            <div class="ca-section-card">
+              <!-- Section Header Row -->
+              <div class="ca-section-header">
+                <div class="ca-section-title">
+                  <!-- lock icon -->
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                  </svg>
+                  <span>ACCOUNT CREDENTIALS &amp; ACCESS</span>
+                </div>
+                <span class="ca-section-tag">Step 1 of 2</span>
+              </div>
+              <div class="ca-section-divider"></div>
+
+              <!-- Form Layout (2-column grid) -->
+              <div class="ca-form-grid">
+                <!-- Row 1: ROLE & ID NUMBER -->
+                <div class="ca-field-group">
+                  <label class="ca-label" for="caRoleSelect">
+                    ROLE <span class="ca-asterisk">*</span>
+                  </label>
+                  <div class="ca-select-wrap">
+                    <select id="caRoleSelect" class="ca-select" onchange="validateRoleField()">
+                      <option value="user" selected>User</option>
+                      <option value="admin">Admin</option>
+                      <?php if ($role === 'super_admin'): ?>
+                      <option value="super_admin">Super Admin</option>
+                      <?php endif; ?>
+                    </select>
+                    <span class="ca-select-arrow" aria-hidden="true">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                      </svg>
+                    </span>
+                  </div>
+                  <div class="ca-error-msg" id="caRoleError">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="12" y1="8" x2="12" y2="12"></line>
+                      <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                    <span id="caRoleErrorText">Please select a role</span>
+                  </div>
+                </div>
+
+                <div class="ca-field-group">
+                  <label class="ca-label" for="caIdNumber">
+                    ID NUMBER
+                  </label>
+                  <input type="text" id="caIdNumber" class="ca-input ca-mono" readonly value="" placeholder="YYYY-NNNN" tabindex="-1">
+                  <div class="ca-helper-note">Auto-generated system identifier</div>
+                </div>
+
+                <!-- Row 2: USERNAME & EMAIL ADDRESS -->
+                <div class="ca-field-group">
+                  <label class="ca-label" for="caUsername">
+                    USERNAME <span class="ca-asterisk">*</span>
+                  </label>
+                  <input type="text" id="caUsername" class="ca-input" placeholder="Enter username" maxlength="50" autocomplete="off" onblur="validateUsernameField()" oninput="clearFieldError('caUsername')">
+                  <div class="ca-error-msg" id="caUsernameError">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="12" y1="8" x2="12" y2="12"></line>
+                      <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                    <span id="caUsernameErrorText">Username is required</span>
+                  </div>
+                </div>
+
+                <div class="ca-field-group">
+                  <label class="ca-label" for="caEmail">
+                    EMAIL ADDRESS <span class="ca-asterisk">*</span>
+                  </label>
+                  <input type="email" id="caEmail" class="ca-input" placeholder="e.g. user@example.com" maxlength="100" autocomplete="off" onblur="validateEmailField()" oninput="clearFieldError('caEmail')">
+                  <div class="ca-error-msg" id="caEmailError">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="12" y1="8" x2="12" y2="12"></line>
+                      <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                    <span id="caEmailErrorText">Valid email address is required</span>
+                  </div>
+                </div>
+
+                <!-- Row 3: INITIAL PASSWORD (full width) -->
+                <div class="ca-field-group ca-col-full">
+                  <div class="ca-label-row">
+                    <label class="ca-label" for="caPassword" style="margin-bottom:0;">
+                      INITIAL PASSWORD
+                    </label>
+                    <button type="button" class="ca-reset-link" onclick="generateAndSetNewPassword()" title="Generate random 8-character password">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="23 4 23 10 17 10"></polyline>
+                        <polyline points="1 20 1 14 7 14"></polyline>
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                      </svg>
+                      <span>Auto-Generate Password</span>
+                    </button>
+                  </div>
+                  <div class="ca-password-input-wrap" style="position: relative;">
+                    <input type="password" id="caPassword" class="ca-input ca-mono" value="" placeholder="Auto-generated password" style="padding-right: 4.8rem;" oninput="updatePasswordStrength(this.value); clearFieldError('caPassword');">
+                    <div class="ca-password-actions" style="position: absolute; right: 0.4rem; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 3px;">
+                      <button type="button" class="ca-pw-toggle-btn" id="caPwToggleBtn" onclick="toggleCaPasswordVisibility()" title="Show/Hide password" aria-label="Toggle password visibility">
+                        <svg id="caPwEyeIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                          <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                      </button>
+                      <button type="button" class="ca-copy-btn" style="position: static; transform: none;" onclick="copyPasswordToClipboard(this)" title="Copy password" aria-label="Copy password">
+                        <svg id="caCopyIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Password strength bar & labels -->
+                  <div class="ca-strength-container">
+                    <div class="ca-strength-bar">
+                      <div class="ca-strength-segment" id="caSegment1"></div>
+                      <div class="ca-strength-segment" id="caSegment2"></div>
+                      <div class="ca-strength-segment" id="caSegment3"></div>
+                      <div class="ca-strength-segment" id="caSegment4"></div>
+                    </div>
+                    <div class="ca-strength-footer">
+                      <span class="ca-strength-hint">Auto-generated 8-char password (1 uppercase, 1 special, 1 number). Will be sent to recipient's email.</span>
+                      <span class="ca-strength-badge" id="caStrengthBadge">Good</span>
+                    </div>
+                  </div>
+                  <div class="ca-error-msg" id="caPasswordError">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="12" y1="8" x2="12" y2="12"></line>
+                      <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                    <span id="caPasswordErrorText">Password is required</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Superadmin Handover Setting: only shown when Role === Super Admin -->
+              <div id="caSuperadminHandoverGroup" class="ca-handover-setting-box" style="display: none; margin-top: 1.1rem; padding: 1.1rem; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-surface-subtle); box-shadow: var(--shadow-xs);">
+                <div style="display: flex; align-items: flex-start; gap: 0.9rem;">
+                  <div style="padding-top: 3px;">
+                    <input type="checkbox" id="caDeactivateOnLogout" class="ca-custom-checkbox" style="width: 19px; height: 19px; cursor: pointer; accent-color: var(--primary);">
+                  </div>
+                  <div style="flex: 1;">
+                    <label for="caDeactivateOnLogout" style="display: block; font-weight: 600; font-size: 0.92rem; color: var(--text-primary); cursor: pointer; margin-bottom: 0.3rem;">
+                      Deactivate My Account After Logout
+                    </label>
+                    <p style="margin: 0; font-size: 0.83rem; color: var(--text-muted); line-height: 1.5;">
+                      If enabled, your account will become Inactive when you log out after creating the new Superadmin. You will not be able to log in again until an authorized Superadmin reactivates your account.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Footer for Step 1 -->
+            <div class="ca-modal-footer">
+              <button type="button" class="ca-btn ca-btn-cancel" onclick="closeCreateAccountModal()">
+                Cancel
+              </button>
+              <button type="button" id="caNextStepBtn" class="ca-btn ca-btn-submit" onclick="goToCreateAccountStep(2)">
+                <span>Next: Configure Privileges</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                  <polyline points="12 5 19 12 12 19"></polyline>
                 </svg>
-                <span>ACCOUNT CREDENTIALS &amp; ACCESS</span>
-              </div>
-              <span class="ca-section-tag">Login &amp; Role</span>
-            </div>
-            <div class="ca-section-divider"></div>
-
-            <!-- Form Layout (2-column grid) -->
-            <div class="ca-form-grid">
-              <!-- Row 1: ROLE & ID NUMBER -->
-              <div class="ca-field-group">
-                <label class="ca-label" for="caRoleSelect">
-                  ROLE <span class="ca-asterisk">*</span>
-                </label>
-                <div class="ca-select-wrap">
-                  <select id="caRoleSelect" class="ca-select" onchange="validateRoleField()">
-                    <option value="user" selected>User</option>
-                    <option value="admin">Admin</option>
-                    <?php if ($role === 'super_admin'): ?>
-                    <option value="super_admin">Super Admin</option>
-                    <?php endif; ?>
-                  </select>
-                  <span class="ca-select-arrow" aria-hidden="true">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                      <polyline points="6 9 12 15 18 9"></polyline>
-                    </svg>
-                  </span>
-                </div>
-                <div class="ca-error-msg" id="caRoleError">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <line x1="12" y1="8" x2="12" y2="12"></line>
-                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
-                  </svg>
-                  <span id="caRoleErrorText">Please select a role</span>
-                </div>
-              </div>
-
-              <div class="ca-field-group">
-                <label class="ca-label" for="caIdNumber">
-                  ID NUMBER
-                </label>
-                <input type="text" id="caIdNumber" class="ca-input ca-mono" readonly value="" placeholder="YYYY-NNNN" tabindex="-1">
-                <div class="ca-helper-note">Auto-generated system identifier</div>
-              </div>
-
-              <!-- Row 2: USERNAME & EMAIL ADDRESS -->
-              <div class="ca-field-group">
-                <label class="ca-label" for="caUsername">
-                  USERNAME <span class="ca-asterisk">*</span>
-                </label>
-                <input type="text" id="caUsername" class="ca-input" placeholder="Enter username" maxlength="50" autocomplete="off" onblur="validateUsernameField()" oninput="clearFieldError('caUsername')">
-                <div class="ca-error-msg" id="caUsernameError">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <line x1="12" y1="8" x2="12" y2="12"></line>
-                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
-                  </svg>
-                  <span id="caUsernameErrorText">Username is required</span>
-                </div>
-              </div>
-
-              <div class="ca-field-group">
-                <label class="ca-label" for="caEmail">
-                  EMAIL ADDRESS <span class="ca-asterisk">*</span>
-                </label>
-                <input type="email" id="caEmail" class="ca-input" placeholder="e.g. user@example.com" maxlength="100" autocomplete="off" onblur="validateEmailField()" oninput="clearFieldError('caEmail')">
-                <div class="ca-error-msg" id="caEmailError">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <line x1="12" y1="8" x2="12" y2="12"></line>
-                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
-                  </svg>
-                  <span id="caEmailErrorText">Valid email address is required</span>
-                </div>
-              </div>
-
-              <!-- Row 3: INITIAL PASSWORD (full width) -->
-              <div class="ca-field-group ca-col-full">
-                <div class="ca-label-row">
-                  <label class="ca-label" for="caPassword" style="margin-bottom:0;">
-                    INITIAL PASSWORD
-                  </label>
-                  <button type="button" class="ca-reset-link" onclick="resetDefaultPassword()" title="Reset to default password">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                      <polyline points="1 4 1 10 7 10"></polyline>
-                      <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
-                    </svg>
-                    <span>Reset to @Abcde12345</span>
-                  </button>
-                </div>
-                <div class="ca-password-input-wrap">
-                  <input type="password" id="caPassword" class="ca-input ca-mono" value="@Abcde12345" placeholder="Temporary password" oninput="updatePasswordStrength(this.value)">
-                  <button type="button" class="ca-eye-btn" onclick="togglePasswordVisibility('caPassword', this)" title="Show/Hide password" aria-label="Toggle password visibility">
-                    <svg id="caEyeIcon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                    </svg>
-                  </button>
-                </div>
-
-                <!-- Password strength bar & labels -->
-                <div class="ca-strength-container">
-                  <div class="ca-strength-bar">
-                    <div class="ca-strength-segment" id="caSegment1"></div>
-                    <div class="ca-strength-segment" id="caSegment2"></div>
-                    <div class="ca-strength-segment" id="caSegment3"></div>
-                    <div class="ca-strength-segment" id="caSegment4"></div>
-                  </div>
-                  <div class="ca-strength-footer">
-                    <span class="ca-strength-hint">User will be required to change password on first login</span>
-                    <span class="ca-strength-badge" id="caStrengthBadge">Strong</span>
-                  </div>
-                </div>
-                <div class="ca-error-msg" id="caPasswordError">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <line x1="12" y1="8" x2="12" y2="12"></line>
-                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
-                  </svg>
-                  <span id="caPasswordErrorText">Password is required</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Superadmin Handover Setting: only shown when Role === Super Admin -->
-            <div id="caSuperadminHandoverGroup" class="ca-handover-setting-box" style="display: none; margin-top: 1.1rem; padding: 1.1rem; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-surface-subtle); box-shadow: var(--shadow-xs);">
-              <div style="display: flex; align-items: flex-start; gap: 0.9rem;">
-                <div style="padding-top: 3px;">
-                  <input type="checkbox" id="caDeactivateOnLogout" class="ca-custom-checkbox" style="width: 19px; height: 19px; cursor: pointer; accent-color: var(--primary);">
-                </div>
-                <div style="flex: 1;">
-                  <label for="caDeactivateOnLogout" style="display: block; font-weight: 600; font-size: 0.92rem; color: var(--text-primary); cursor: pointer; margin-bottom: 0.3rem;">
-                    Deactivate My Account After Logout
-                  </label>
-                  <p style="margin: 0; font-size: 0.83rem; color: var(--text-muted); line-height: 1.5;">
-                    If enabled, your account will become Inactive when you log out after creating the new Superadmin. You will not be able to log in again until an authorized Superadmin reactivates your account.
-                  </p>
-                </div>
-              </div>
+              </button>
             </div>
           </div>
 
-          <!-- Footer Buttons -->
-          <div class="ca-modal-footer">
-            <button type="button" class="ca-btn ca-btn-cancel" onclick="closeCreateAccountModal()">
-              Cancel
-            </button>
-            <button type="submit" id="caSubmitBtn" class="ca-btn ca-btn-submit">
-              <span id="caSubmitSpinner" class="ca-spinner" style="display:none;"></span>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="ca-submit-icon">
-                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                <circle cx="8.5" cy="7.5" r="4"></circle>
-                <line x1="20" y1="8" x2="20" y2="14"></line>
-                <line x1="23" y1="11" x2="17" y2="11"></line>
-              </svg>
-              <span id="caSubmitText">Create Account</span>
-            </button>
+          <!-- Step 2 Page: Privilege Selection & Permissions (Next Page) -->
+          <div id="caStep2Page" class="ca-step-page" style="display: none;">
+            <!-- Step 2 Account Summary Banner -->
+            <div class="ca-step2-summary" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem; padding:0.85rem 1.15rem; background:var(--bg-surface-subtle); border:1px solid var(--border-color); border-radius:12px; margin-bottom:1.15rem;">
+              <div style="display:flex; align-items:center; gap:0.75rem;">
+                <div id="caStep2Avatar" style="width:38px; height:38px; border-radius:10px; background:var(--primary-light, rgba(0,234,255,0.12)); border:1px solid var(--primary-border, rgba(0,234,255,0.3)); display:flex; align-items:center; justify-content:center; color:var(--primary); font-weight:700; font-size:0.95rem;">
+                  👤
+                </div>
+                <div>
+                  <div style="font-weight:700; font-size:0.95rem; color:var(--text-primary); display:flex; align-items:center; gap:0.5rem;">
+                    <span id="caStep2UsernameDisplay">username</span>
+                    <span id="caStep2RoleBadge" class="badge" style="font-size:0.7rem; padding:2px 7px;">USER</span>
+                  </div>
+                  <div id="caStep2EmailDisplay" style="font-size:0.8rem; color:var(--text-muted);">user@example.com</div>
+                </div>
+              </div>
+              <button type="button" class="ca-reset-link" onclick="goToCreateAccountStep(1)" title="Return to edit credentials">
+                ✏️ Edit Details
+              </button>
+            </div>
+
+            <!-- Privilege Assignment Card -->
+            <div class="ca-section-card" id="caPrivilegeCard">
+              <div class="ca-section-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+                <div class="ca-section-title">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                  </svg>
+                  <span>MODULE PRIVILEGES &amp; PERMISSIONS</span>
+                </div>
+                <div style="display:flex; gap:0.35rem; align-items:center;">
+                  <button type="button" class="ca-priv-preset-btn" onclick="setCaPrivPreset('recommended')">⟳ Defaults</button>
+                  <button type="button" class="ca-priv-preset-btn" onclick="setCaPrivPreset('all')">✓ All</button>
+                  <button type="button" class="ca-priv-preset-btn" onclick="setCaPrivPreset('clear')">⊘ Clear</button>
+                </div>
+              </div>
+              <div class="ca-section-divider"></div>
+
+              <div id="caPrivNotice" style="display:none; font-size:0.83rem; line-height:1.5; padding:0.65rem 0.85rem; border-radius:8px; margin-bottom:1rem; border:1px dashed var(--border-color); background:var(--bg-surface-subtle); color:var(--text-muted);">
+              </div>
+
+              <div class="ca-priv-modules-container" style="display:flex; flex-direction:column; gap:1rem;">
+                <!-- Group 1: Personal & Profile -->
+                <div class="ca-priv-group-box">
+                  <div class="ca-priv-group-header" style="font-size:0.8rem; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-secondary); margin-bottom:0.5rem; display:flex; align-items:center; gap:0.4rem;">
+                    <span>👤</span> Personal &amp; Account
+                  </div>
+                  <div class="ca-priv-items-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:0.6rem;">
+                    <label class="ca-priv-item" style="display:flex; align-items:flex-start; gap:0.65rem; padding:0.65rem 0.8rem; border-radius:10px; border:1px solid var(--border-color); background:var(--bg-surface-subtle); cursor:pointer;">
+                      <input type="checkbox" class="ca-privilege-cb" value="profile_management" checked style="margin-top:2px; accent-color:var(--primary); width:16px; height:16px;">
+                      <div style="flex:1;">
+                        <div style="font-size:0.86rem; font-weight:600; color:var(--text-primary);">Profile Management</div>
+                        <div style="font-size:0.77rem; color:var(--text-muted); line-height:1.4;">View and modify personal profile information</div>
+                      </div>
+                    </label>
+                    <label class="ca-priv-item" style="display:flex; align-items:flex-start; gap:0.65rem; padding:0.65rem 0.8rem; border-radius:10px; border:1px solid var(--border-color); background:var(--bg-surface-subtle); cursor:pointer;">
+                      <input type="checkbox" class="ca-privilege-cb" value="change_password" checked style="margin-top:2px; accent-color:var(--primary); width:16px; height:16px;">
+                      <div style="flex:1;">
+                        <div style="font-size:0.86rem; font-weight:600; color:var(--text-primary);">Change Password</div>
+                        <div style="font-size:0.77rem; color:var(--text-muted); line-height:1.4;">Update account credentials securely</div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                <!-- Group 2: User Directory & Management -->
+                <div class="ca-priv-group-box" id="caPrivGroupAdmin">
+                  <div class="ca-priv-group-header" style="font-size:0.8rem; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-secondary); margin-bottom:0.5rem; display:flex; align-items:center; gap:0.4rem;">
+                    <span>👥</span> User Directory &amp; Account Management
+                  </div>
+                  <div class="ca-priv-items-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:0.6rem;">
+                    <label class="ca-priv-item" style="display:flex; align-items:flex-start; gap:0.65rem; padding:0.65rem 0.8rem; border-radius:10px; border:1px solid var(--border-color); background:var(--bg-surface-subtle); cursor:pointer;">
+                      <input type="checkbox" class="ca-privilege-cb" value="view_accounts" checked style="margin-top:2px; accent-color:var(--primary); width:16px; height:16px;">
+                      <div style="flex:1;">
+                        <div style="font-size:0.86rem; font-weight:600; color:var(--text-primary);">View Accounts</div>
+                        <div style="font-size:0.77rem; color:var(--text-muted); line-height:1.4;">Access user directory and profile summaries</div>
+                      </div>
+                    </label>
+                    <label class="ca-priv-item" style="display:flex; align-items:flex-start; gap:0.65rem; padding:0.65rem 0.8rem; border-radius:10px; border:1px solid var(--border-color); background:var(--bg-surface-subtle); cursor:pointer;">
+                      <input type="checkbox" class="ca-privilege-cb" value="create_accounts" checked style="margin-top:2px; accent-color:var(--primary); width:16px; height:16px;">
+                      <div style="flex:1;">
+                        <div style="font-size:0.86rem; font-weight:600; color:var(--text-primary);">Create Accounts</div>
+                        <div style="font-size:0.77rem; color:var(--text-muted); line-height:1.4;">Create and provision new user accounts</div>
+                      </div>
+                    </label>
+                    <label class="ca-priv-item" style="display:flex; align-items:flex-start; gap:0.65rem; padding:0.65rem 0.8rem; border-radius:10px; border:1px solid var(--border-color); background:var(--bg-surface-subtle); cursor:pointer;">
+                      <input type="checkbox" class="ca-privilege-cb" value="edit_manage_accounts" checked style="margin-top:2px; accent-color:var(--primary); width:16px; height:16px;">
+                      <div style="flex:1;">
+                        <div style="font-size:0.86rem; font-weight:600; color:var(--text-primary);">Edit &amp; Manage Accounts</div>
+                        <div style="font-size:0.77rem; color:var(--text-muted); line-height:1.4;">Edit user details, roles, and privileges</div>
+                      </div>
+                    </label>
+                    <label class="ca-priv-item" style="display:flex; align-items:flex-start; gap:0.65rem; padding:0.65rem 0.8rem; border-radius:10px; border:1px solid var(--border-color); background:var(--bg-surface-subtle); cursor:pointer;">
+                      <input type="checkbox" class="ca-privilege-cb" value="block_unblock_users" checked style="margin-top:2px; accent-color:var(--primary); width:16px; height:16px;">
+                      <div style="flex:1;">
+                        <div style="font-size:0.86rem; font-weight:600; color:var(--text-primary);">Deactivate / Reactivate Users</div>
+                        <div style="font-size:0.77rem; color:var(--text-muted); line-height:1.4;">Deactivate or reactivate user accounts</div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                <!-- Group 3: Approvals, Requests & Auditing -->
+                <div class="ca-priv-group-box" id="caPrivGroupAudit">
+                  <div class="ca-priv-group-header" style="font-size:0.8rem; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-secondary); margin-bottom:0.5rem; display:flex; align-items:center; gap:0.4rem;">
+                    <span>📋</span> Approvals, Requests &amp; Auditing
+                  </div>
+                  <div class="ca-priv-items-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:0.6rem;">
+                    <label class="ca-priv-item" style="display:flex; align-items:flex-start; gap:0.65rem; padding:0.65rem 0.8rem; border-radius:10px; border:1px solid var(--border-color); background:var(--bg-surface-subtle); cursor:pointer;">
+                      <input type="checkbox" class="ca-privilege-cb" value="registration_approval" checked style="margin-top:2px; accent-color:var(--primary); width:16px; height:16px;">
+                      <div style="flex:1;">
+                        <div style="font-size:0.86rem; font-weight:600; color:var(--text-primary);">Registration Approvals</div>
+                        <div style="font-size:0.77rem; color:var(--text-muted); line-height:1.4;">Review and approve or reject signups</div>
+                      </div>
+                    </label>
+                    <label class="ca-priv-item" style="display:flex; align-items:flex-start; gap:0.65rem; padding:0.65rem 0.8rem; border-radius:10px; border:1px solid var(--border-color); background:var(--bg-surface-subtle); cursor:pointer;">
+                      <input type="checkbox" class="ca-privilege-cb" value="account_deletion_requests" checked style="margin-top:2px; accent-color:var(--primary); width:16px; height:16px;">
+                      <div style="flex:1;">
+                        <div style="font-size:0.86rem; font-weight:600; color:var(--text-primary);">Deletion Requests</div>
+                        <div style="font-size:0.77rem; color:var(--text-muted); line-height:1.4;">Submit or process account deletion requests</div>
+                      </div>
+                    </label>
+                    <label class="ca-priv-item" style="display:flex; align-items:flex-start; gap:0.65rem; padding:0.65rem 0.8rem; border-radius:10px; border:1px solid var(--border-color); background:var(--bg-surface-subtle); cursor:pointer;">
+                      <input type="checkbox" class="ca-privilege-cb" value="view_activity_logs" checked style="margin-top:2px; accent-color:var(--primary); width:16px; height:16px;">
+                      <div style="flex:1;">
+                        <div style="font-size:0.86rem; font-weight:600; color:var(--text-primary);">View Activity Logs</div>
+                        <div style="font-size:0.77rem; color:var(--text-muted); line-height:1.4;">Access system-wide audit activity trails</div>
+                      </div>
+                    </label>
+                    <label class="ca-priv-item" style="display:flex; align-items:flex-start; gap:0.65rem; padding:0.65rem 0.8rem; border-radius:10px; border:1px solid var(--border-color); background:var(--bg-surface-subtle); cursor:pointer;">
+                      <input type="checkbox" class="ca-privilege-cb" value="export_activity_logs" style="margin-top:2px; accent-color:var(--primary); width:16px; height:16px;">
+                      <div style="flex:1;">
+                        <div style="font-size:0.86rem; font-weight:600; color:var(--text-primary);">Export Audit Logs</div>
+                        <div style="font-size:0.77rem; color:var(--text-muted); line-height:1.4;">Export security audit trails for reporting</div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Footer for Step 2 -->
+            <div class="ca-modal-footer">
+              <button type="button" class="ca-btn ca-btn-cancel" onclick="goToCreateAccountStep(1)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="19" y1="12" x2="5" y2="12"></line>
+                  <polyline points="12 19 5 12 12 5"></polyline>
+                </svg>
+                <span>Back</span>
+              </button>
+              <button type="submit" id="caSubmitBtn" class="ca-btn ca-btn-submit">
+                <span id="caSubmitSpinner" class="ca-spinner" style="display:none;"></span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="ca-submit-icon">
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="8.5" cy="7.5" r="4"></circle>
+                  <line x1="20" y1="8" x2="20" y2="14"></line>
+                  <line x1="23" y1="11" x2="17" y2="11"></line>
+                </svg>
+                <span id="caSubmitText">Create Account</span>
+              </button>
+            </div>
           </div>
         </form>
       </div>
@@ -1774,6 +2180,54 @@ if (!is_array($privs)) $privs = [];
   <div id="caToastContainer" class="ca-toast-container"></div>
 
   </main>
+
+  <!-- Logout Confirmation Dialog Modal -->
+  <div id="logoutConfirmModal" class="modern-modal-backdrop" style="display:none;" onclick="if(event.target===this) closeLogoutConfirmModal()">
+    <div class="modern-modal-card" style="max-width: 440px;">
+      <div class="modern-modal-header">
+        <div class="modal-header-branding">
+          <div class="modal-icon-badge" style="background: rgba(239, 68, 68, 0.15); color: var(--danger, #ef4444);">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <polyline points="16 17 21 12 16 7"></polyline>
+              <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+          </div>
+          <div>
+            <h3 class="modal-title" style="font-size: 1.05rem;">Logout Confirmation</h3>
+            <p class="modal-subtitle">Session Security Verification</p>
+          </div>
+        </div>
+        <button type="button" class="modal-close-btn" onclick="closeLogoutConfirmModal()" aria-label="Close dialog">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div class="modern-modal-body" style="padding: 1.25rem 1.5rem;">
+        <p style="font-size: 1rem; font-weight: 600; color: var(--text-primary); margin: 0 0 0.5rem;">
+          Are you sure you want to log out?
+        </p>
+        <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.5; margin: 0;">
+          Your active session will be securely terminated and you will need to sign in again to access the portal.
+        </p>
+      </div>
+
+      <div class="modern-modal-footer" style="display: flex; justify-content: flex-end; align-items: center; gap: 0.75rem; padding: 1rem 1.5rem; border-top: 1px solid var(--border-color);">
+        <button type="button" class="btn-modal-cancel" onclick="closeLogoutConfirmModal()" style="padding: 0.65rem 1.25rem; font-weight: 500; font-size: 0.88rem; border-radius: 9px;">Cancel</button>
+        <button type="button" class="btn-modal-submit btn-danger-glow" id="confirmLogoutBtn" onclick="confirmLogout()" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important; color: #ffffff !important; border: 1px solid rgba(239, 68, 68, 0.4) !important; display: inline-flex; align-items: center; justify-content: center; gap: 0.45rem; padding: 0.65rem 1.25rem; border-radius: 9px; font-weight: 600; font-size: 0.88rem; cursor: pointer; box-shadow: 0 4px 14px rgba(239, 68, 68, 0.35);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color: #ffffff; flex-shrink: 0;">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            <polyline points="16 17 21 12 16 7"></polyline>
+            <line x1="21" y1="12" x2="9" y2="12"></line>
+          </svg>
+          <span style="color: #ffffff !important; font-weight: 600; letter-spacing: 0.3px;">Log Out</span>
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- Modern Change Account Password Modal -->
   <div id="dashChangePasswordModal" class="modern-modal-backdrop" style="display:none;" onclick="if(event.target===this) closeDashChangePasswordModal()">
@@ -1944,29 +2398,71 @@ if (!is_array($privs)) $privs = [];
   </div>
 
   
-  <!-- Custom Alert Modal -->
-  <div id="customAlertModal" style="display:none; position:fixed; inset:0; background:var(--bg-backdrop, rgba(15, 23, 42, 0.65)); z-index:999999; align-items:center; justify-content:center; backdrop-filter: blur(8px);">
-    <div style="background:var(--bg-surface); border:1px solid var(--border-color); border-radius:14px; width:90%; max-width:420px; padding:1.75rem; box-shadow: var(--shadow-xl);">
-      <div style="font-family:'Plus Jakarta Sans', 'Inter', sans-serif; font-size:1.05rem; color:var(--primary); font-weight:700; margin-bottom:0.75rem; display: flex; align-items: center; gap: 0.5rem;">
-        <span>🔔</span> SYSTEM NOTIFICATION
+  <!-- Custom Alert Modal (Modern Cyberpunk Design) -->
+  <div id="customAlertModal" class="modern-modal-backdrop" style="display:none; z-index:999999;" onclick="if(event.target===this) closeCustomAlert()">
+    <div class="modern-modal-card" style="max-width: 450px; box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.55), 0 0 35px rgba(59, 130, 246, 0.15);">
+      <div class="modern-modal-header" style="padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border-subtle);">
+        <div class="modal-header-branding" style="display: flex; align-items: center; gap: 0.85rem;">
+          <div id="customAlertBadge" class="modal-icon-badge" style="width: 42px; height: 42px; border-radius: 12px; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.3); color: #3b82f6; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.25s ease;">
+            <span id="customAlertIcon" style="display: flex; align-items: center; justify-content: center;">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="16" x2="12" y2="12"></line>
+                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+              </svg>
+            </span>
+          </div>
+          <div>
+            <h3 id="customAlertTitle" class="modal-title" style="font-size: 1.05rem; font-weight: 700; margin: 0; color: var(--text-primary); letter-spacing: -0.01em;">SYSTEM NOTIFICATION</h3>
+            <p id="customAlertSubtitle" class="modal-subtitle" style="font-size: 0.78rem; color: var(--text-muted); margin: 2px 0 0 0;">CyberAuth Security Advisory</p>
+          </div>
+        </div>
+        <button type="button" class="modal-close-btn" onclick="closeCustomAlert()" aria-label="Close dialog" title="Close" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; transition: all 0.2s;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
       </div>
-      <p id="customAlertMessage" style="color:var(--text-primary); font-size:0.92rem; line-height:1.55; margin-bottom:1.5rem; word-wrap: break-word; overflow-wrap: anywhere;"></p>
-      <div style="display:flex; justify-content:flex-end;">
-        <button class="portal-submit-btn" onclick="closeCustomAlert()" style="width:auto; padding:0.48rem 1.6rem; font-size:0.88rem;">OK</button>
+
+      <div class="modern-modal-body" style="padding: 1.5rem 1.5rem 1.25rem 1.5rem;">
+        <p id="customAlertMessage" style="color: var(--text-primary); font-size: 0.95rem; line-height: 1.6; margin: 0; word-wrap: break-word; overflow-wrap: anywhere;"></p>
+      </div>
+
+      <div class="modern-modal-footer" style="display: flex; justify-content: flex-end; padding: 1rem 1.5rem; border-top: 1px solid var(--border-subtle); background: var(--bg-surface-subtle, rgba(0,0,0,0.02));">
+        <button type="button" id="customAlertOkBtn" class="btn-modal-submit btn-primary" onclick="closeCustomAlert()" style="padding: 0.62rem 1.85rem; border-radius: 10px; font-weight: 600; font-size: 0.88rem; cursor: pointer; min-width: 96px; display: inline-flex; align-items: center; justify-content: center; gap: 0.45rem;">
+          <span>OK</span>
+        </button>
       </div>
     </div>
   </div>
 
-  <!-- Custom Confirm Modal -->
-  <div id="customConfirmModal" style="display:none; position:fixed; inset:0; background:var(--bg-backdrop, rgba(15, 23, 42, 0.65)); z-index:999999; align-items:center; justify-content:center; backdrop-filter: blur(8px);">
-    <div style="background:var(--bg-surface); border:1px solid var(--border-color); border-radius:14px; width:90%; max-width:420px; padding:1.75rem; box-shadow: var(--shadow-xl);">
-      <div style="font-family:'Plus Jakarta Sans', 'Inter', sans-serif; font-size:1.05rem; color:var(--warning); font-weight:700; margin-bottom:0.75rem; display: flex; align-items: center; gap: 0.5rem;">
-        <span>⚠️</span> ACTION CONFIRMATION
+  <!-- Custom Confirm Modal (Modern Cyberpunk Design) -->
+  <div id="customConfirmModal" class="modern-modal-backdrop" style="display:none; z-index:999999;" onclick="if(event.target===this) resolveCustomConfirm(false)">
+    <div class="modern-modal-card" style="max-width: 460px; box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.55), 0 0 35px rgba(245, 158, 11, 0.15);">
+      <div class="modern-modal-header" style="padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border-subtle);">
+        <div class="modal-header-branding" style="display: flex; align-items: center; gap: 0.85rem;">
+          <div class="modal-icon-badge warning" style="width: 42px; height: 42px; border-radius: 12px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3); color: #f59e0b; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
+              <line x1="12" y1="9" x2="12" y2="13"/>
+              <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+          </div>
+          <div>
+            <h3 class="modal-title" style="font-size: 1.05rem; font-weight: 700; margin: 0; color: var(--text-primary); letter-spacing: -0.01em;">ACTION CONFIRMATION</h3>
+            <p class="modal-subtitle" style="font-size: 0.78rem; color: var(--text-muted); margin: 2px 0 0 0;">CyberAuth Security Verification</p>
+          </div>
+        </div>
+        <button type="button" class="modal-close-btn" onclick="resolveCustomConfirm(false)" aria-label="Close dialog" title="Cancel" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; transition: all 0.2s;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
       </div>
-      <p id="customConfirmMessage" style="color:var(--text-primary); font-size:0.92rem; line-height:1.55; margin-bottom:1.5rem; word-wrap: break-word; overflow-wrap: anywhere;"></p>
-      <div style="display:flex; justify-content:flex-end; gap:0.75rem;">
-        <button type="button" class="btn-small" onclick="resolveCustomConfirm(false)" style="padding:0.48rem 1.25rem;">Cancel</button>
-        <button type="button" class="portal-submit-btn" onclick="resolveCustomConfirm(true)" style="width:auto; padding:0.48rem 1.6rem; font-size:0.88rem;">Confirm</button>
+
+      <div class="modern-modal-body" style="padding: 1.5rem 1.5rem 1.25rem 1.5rem;">
+        <p id="customConfirmMessage" style="color: var(--text-primary); font-size: 0.95rem; line-height: 1.6; margin: 0; word-wrap: break-word; overflow-wrap: anywhere;"></p>
+      </div>
+
+      <div class="modern-modal-footer" style="display: flex; justify-content: flex-end; gap: 0.75rem; padding: 1rem 1.5rem; border-top: 1px solid var(--border-subtle); background: var(--bg-surface-subtle, rgba(0,0,0,0.02));">
+        <button type="button" class="btn-modal-cancel" onclick="resolveCustomConfirm(false)" style="padding: 0.62rem 1.35rem; border-radius: 10px; font-weight: 500; font-size: 0.88rem; cursor: pointer;">Cancel</button>
+        <button type="button" class="btn-modal-submit btn-primary" onclick="resolveCustomConfirm(true)" style="padding: 0.62rem 1.85rem; border-radius: 10px; font-weight: 600; font-size: 0.88rem; cursor: pointer;">Confirm</button>
       </div>
     </div>
   </div>
@@ -2002,19 +2498,25 @@ if (!is_array($privs)) $privs = [];
             <div>
               <label style="display:block; margin-bottom:0.35rem; color:var(--text-secondary); font-size:0.82rem; font-weight:600;">Reset Password (Optional)</label>
               <div style="position: relative; display: flex; align-items: center;">
-                <input type="password" id="editNewPassword" class="cyber-input" placeholder="Leave blank to keep current password" style="width: 100%; padding-right: 40px; box-sizing: border-box;">
-                <button type="button" onclick="const p = document.getElementById('editNewPassword'); const svg = this.querySelector('svg'); if(p.type==='password'){p.type='text'; svg.innerHTML='<path stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21\'></path>';}else{p.type='password'; svg.innerHTML='<path stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'M15 12a3 3 0 11-6 0 3 3 0 016 0z\'></path><path stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z\'></path>';}" style="position: absolute; right: 10px; background: none; border: none; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; padding: 0;">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                  </svg>
+                <input type="password" id="editNewPassword" class="cyber-input" placeholder="Leave blank to keep current password" style="width: 100%; box-sizing: border-box; padding-right: 2.8rem;">
+                <button type="button" class="modal-pw-toggle" onclick="toggleModalPwVisibility('editNewPassword', this)" aria-label="Toggle password visibility">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#00eaff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 0 6px rgba(0,234,255,0.6)); pointer-events: none; display: block;"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                 </button>
               </div>
             </div>
             <?php endif; ?>
-            <div style="display:flex; justify-content:flex-end; gap:0.75rem; margin-top:1rem;">
-              <button type="button" class="btn-small" onclick="closeEditModal()">Cancel</button>
-              <button type="button" class="portal-submit-btn" onclick="submitEditUser()" style="width: auto; padding: 0.55rem 1.8rem; font-size: 0.88rem;">Save Changes</button>
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:0.75rem; margin-top:1rem;">
+              <?php if ($role === 'super_admin' || ($role === 'admin' && in_array('edit_manage_accounts', $privs))): ?>
+                <button type="button" class="btn-small btn-secondary" id="editUserPrivBtn" onclick="openPrivFromEditModal()" style="display:inline-flex; align-items:center; gap:0.35rem;" title="Configure module privileges for this user">
+                  <span>🛡️</span> Edit Privileges
+                </button>
+              <?php else: ?>
+                <div></div>
+              <?php endif; ?>
+              <div style="display:flex; gap:0.75rem;">
+                <button type="button" class="btn-small" onclick="closeEditModal()">Cancel</button>
+                <button type="button" class="portal-submit-btn" onclick="submitEditUser()" style="width: auto; padding: 0.55rem 1.8rem; font-size: 0.88rem;">Save Changes</button>
+              </div>
             </div>
           </div>
         </form>
@@ -2023,7 +2525,7 @@ if (!is_array($privs)) $privs = [];
   </div>
 
   <!-- Manage Privileges Modal (Clean Integrated Dialog) -->
-  <?php if ($role === 'super_admin'): ?>
+  <?php if ($role === 'super_admin' || ($role === 'admin' && in_array('edit_manage_accounts', $privs))): ?>
   <div id="managePrivilegesModal" class="modern-modal-backdrop" style="display:none; position:fixed; inset:0; background:var(--bg-backdrop, rgba(15, 23, 42, 0.65)); backdrop-filter:blur(8px); z-index:99999; align-items:center; justify-content:center; padding: 1.5rem;" onclick="if(event.target===this) closeManagePrivilegesModal()">
     <div class="panel" style="width:100%; max-width:840px; max-height: 90vh; overflow-y:auto; margin: auto; border: 1px solid var(--border-color); border-radius: 18px; box-shadow: var(--shadow-xl); background: var(--bg-surface);">
       <!-- Modal Header -->
@@ -2117,8 +2619,8 @@ if (!is_array($privs)) $privs = [];
             <label class="priv-item-label">
               <input type="checkbox" class="priv-cb modal-priv-cb" value="block_unblock_users" onchange="updateModalPrivCount()">
               <div class="priv-item-text">
-                <span class="priv-item-name">Block / Unblock Users</span>
-                <span class="priv-item-desc">Suspend or restore account access status</span>
+                <span class="priv-item-name">Deactivate / Reactivate Users</span>
+                <span class="priv-item-desc">Deactivate or reactivate account access status</span>
               </div>
             </label>
           </div>
@@ -2253,7 +2755,7 @@ if (!is_array($privs)) $privs = [];
           <!-- Step 5: Explicit Checkbox Confirmation -->
           <div class="succ-confirm-check-wrap">
             <label class="succ-confirm-label">
-              <input type="checkbox" id="succConfirmCheckbox" required />
+              <input type="checkbox" id="succConfirmCheckbox" onchange="onSuccConfirmCheckboxChange()" required />
               <span>I acknowledge that I am stepping down as Superadmin and transferring all master rights to the selected successor. I understand this action takes effect immediately.</span>
             </label>
           </div>
@@ -2261,7 +2763,7 @@ if (!is_array($privs)) $privs = [];
           <!-- Modal Actions -->
           <div class="modern-modal-footer">
             <button type="button" class="btn-modal-cancel" onclick="closeSuperadminSuccessionModal()">Cancel</button>
-            <button type="submit" class="btn-modal-submit btn-danger-glow" id="succSubmitBtn">
+            <button type="submit" class="btn-modal-submit btn-danger-glow" id="succSubmitBtn" disabled>
               <span id="succSubmitBtnText">Execute Succession &amp; Step Down</span>
             </button>
           </div>
@@ -2300,7 +2802,7 @@ if (!is_array($privs)) $privs = [];
     </div>
   </div>
 
-  <!-- Account Status Management Modal (Deactivate / Reactivate / Suspend / Restore) -->
+  <!-- Account Status Management Modal (Deactivate / Reactivate) -->
   <div id="accountStatusModal" class="modern-modal-backdrop" style="display:none;" onclick="if(event.target===this) closeAccountStatusModal()">
     <div class="modern-modal-card" style="max-width:480px;">
       <div class="modern-modal-header">
@@ -2350,7 +2852,7 @@ if (!is_array($privs)) $privs = [];
 
           <div class="modal-field-group">
             <label class="modal-field-label" for="statusModalPasswordInput">
-              <span>ADMINISTRATOR PASSWORD CONFIRMATION</span>
+              <span id="statusModalPasswordLabel">ADMINISTRATOR PASSWORD CONFIRMATION</span>
               <span class="req-star" style="color:var(--danger)">*</span>
             </label>
             <div class="modal-input-wrapper">
@@ -2404,6 +2906,15 @@ if (!is_array($privs)) $privs = [];
     const userPrivileges = <?= json_encode($privs) ?>;
     const currentUsername = <?= json_encode($user['username'] ?? '') ?>;
     window.currentUsername = currentUsername;
+
+    // Route any native alert dialogs into our modern cyberpunk alert modal
+    window.alert = function(msg) {
+      if (typeof window.customAlert === 'function') {
+        window.customAlert(msg);
+      } else {
+        console.log('[System Alert]:', msg);
+      }
+    };
 
     function closeEditModal() {
       const modal = document.getElementById('editUserModal');
@@ -2463,10 +2974,25 @@ if (!is_array($privs)) $privs = [];
       }
     }
 
+    function openLogoutConfirmModal() {
+      const modal = document.getElementById('logoutConfirmModal');
+      if (modal) modal.style.display = 'flex';
+    }
+    function closeLogoutConfirmModal() {
+      const modal = document.getElementById('logoutConfirmModal');
+      if (modal) modal.style.display = 'none';
+    }
+    function confirmLogout() {
+      window.location.href = '../php/logout.php';
+    }
+    window.openLogoutConfirmModal = openLogoutConfirmModal;
+    window.closeLogoutConfirmModal = closeLogoutConfirmModal;
+    window.confirmLogout = confirmLogout;
 
     // ── Super Admin Status Monitor ──────────────────────────────────────────
     let saStatusPollTimer = null;
     const MY_USER_ID = <?= (int)($user['id'] ?? 0) ?>;
+    const MY_ROLE = <?= json_encode($role) ?>;
 
     async function loadSuperAdminStatus() {
       const list = document.getElementById('saStatusList');
@@ -2540,6 +3066,15 @@ if (!is_array($privs)) $privs = [];
       loadSuperAdminStatus();
       clearInterval(saStatusPollTimer);
       saStatusPollTimer = setInterval(loadSuperAdminStatus, 30000);
+    }
+
+    // Auto-init poller for Super Admin
+    if (MY_ROLE === 'super_admin') {
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initSaStatusPoller);
+      } else {
+        initSaStatusPoller();
+      }
     }
 
     // Profile Section Interactive Logic
@@ -2643,7 +3178,11 @@ if (!is_array($privs)) $privs = [];
       const phone = document.getElementById('dash_phone').value.trim();
 
       if (!firstName || !lastName || !username || !email) {
-        alert('Please fill in all required fields marked with *');
+        if (typeof customAlert === 'function') {
+          await customAlert('Please fill in all required fields marked with *', 'warning', 'MISSING REQUIRED FIELDS', 'Identity and contact details cannot be blank');
+        } else {
+          alert('Please fill in all required fields marked with *');
+        }
         return;
       }
 
@@ -2705,12 +3244,36 @@ if (!is_array($privs)) $privs = [];
           // Lock change password button back
           setDashChangePasswordEnabled(false);
 
-          alert('Profile updated successfully!');
+          // Reset button state immediately before displaying notification modal
+          saveBtn.innerHTML = origText;
+          saveBtn.disabled = false;
+
+          if (typeof showToast === 'function') {
+            showToast('Profile updated successfully!', 'success');
+          }
+
+          if (typeof customAlert === 'function') {
+            await customAlert('Profile updated successfully!', 'success', 'PROFILE UPDATED', 'Identity and contact details have been saved.');
+          } else {
+            alert('Profile updated successfully!');
+          }
         } else {
-          alert(data.message || 'Failed to update profile');
+          saveBtn.innerHTML = origText;
+          saveBtn.disabled = false;
+          if (typeof customAlert === 'function') {
+            await customAlert(data.message || 'Failed to update profile', 'error', 'UPDATE FAILED', 'Server could not process your update');
+          } else {
+            alert(data.message || 'Failed to update profile');
+          }
         }
       } catch (err) {
-        alert('Network error while saving profile');
+        saveBtn.innerHTML = origText;
+        saveBtn.disabled = false;
+        if (typeof customAlert === 'function') {
+          await customAlert('Network error while saving profile. Please check your connection.', 'error', 'NETWORK ERROR', 'Connection could not be established');
+        } else {
+          alert('Network error while saving profile');
+        }
       } finally {
         saveBtn.innerHTML = origText;
         saveBtn.disabled = false;
@@ -2748,7 +3311,11 @@ if (!is_array($privs)) $privs = [];
     function handleDashChangePasswordClick() {
       const pwBtn = document.getElementById('dashChangePasswordBtn');
       if (pwBtn && pwBtn.disabled) {
-        alert('Please click "Edit Details" in the top-right header first to unlock password changes.');
+        if (typeof customAlert === 'function') {
+          customAlert('Please click "Edit Details" in the top-right header first to unlock password changes.', 'info', 'PROFILE LOCKED', 'Password modification requires unlocking your profile.');
+        } else {
+          alert('Please click "Edit Details" in the top-right header first to unlock password changes.');
+        }
         return;
       }
       openDashChangePasswordModal();
@@ -2799,8 +3366,8 @@ if (!is_array($privs)) $privs = [];
       input.type = isPassword ? 'text' : 'password';
       if (btn) {
         btn.innerHTML = isPassword
-          ? '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" y1="2" x2="22" y2="22"/></svg>'
-          : '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>';
+          ? '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#ff00ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 0 6px rgba(255,0,255,0.6)); pointer-events: none; display: block;"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"></path><circle cx="12" cy="12" r="3"></circle><line x1="3" y1="3" x2="21" y2="21" stroke-width="2"></line></svg>'
+          : '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#00eaff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 0 6px rgba(0,234,255,0.6)); pointer-events: none; display: block;"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"></path><circle cx="12" cy="12" r="3"></circle></svg>';
       }
     }
 
@@ -3032,10 +3599,17 @@ if (!is_array($privs)) $privs = [];
           if (confInput) confInput.value = '';
           evaluateDashModalPwStrength();
 
-          setTimeout(() => {
+          setTimeout(async () => {
             closeDashChangePasswordModal();
-            alert('Your password has been updated successfully.');
-          }, 1200);
+            if (typeof showToast === 'function') {
+              showToast('Password updated successfully!', 'success');
+            }
+            if (typeof customAlert === 'function') {
+              await customAlert('Your password has been updated successfully.', 'success', 'PASSWORD UPDATED', 'Your new credentials are now in effect.');
+            } else {
+              alert('Your password has been updated successfully.');
+            }
+          }, 800);
         } else {
           if (alertBox) {
             alertBox.className = 'modal-alert-banner alert-error';

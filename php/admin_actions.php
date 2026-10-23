@@ -133,17 +133,55 @@ if ($action === 'get_dashboard_stats') {
     $delCountStmt = $db->query("SELECT COUNT(*) FROM delete_requests WHERE status = 'pending'");
     $pendingDel = (int)$delCountStmt->fetchColumn();
 
-    $todayLogsStmt = $db->query("SELECT COUNT(*) FROM activity_logs WHERE DATE(created_at) = CURDATE()");
-    $todayLogs = (int)$todayLogsStmt->fetchColumn();
+    // Telemetry logs: standard user only sees their own; admin never sees super_admin; super_admin sees all
+    if ($role === 'user') {
+        $todayLogsStmt = $db->prepare("SELECT COUNT(*) FROM activity_logs WHERE DATE(created_at) = CURDATE() AND user_id = ?");
+        $todayLogsStmt->execute([$userId]);
+        $todayLogs = (int)$todayLogsStmt->fetchColumn();
 
-    $recentLogsStmt = $db->query("
-        SELECT a.id, a.action, a.details, a.created_at, u.username, u.first_name, u.last_name, u.role
-        FROM activity_logs a
-        LEFT JOIN users u ON a.user_id = u.id
-        ORDER BY a.id DESC
-        LIMIT 6
-    ");
-    $recentLogs = $recentLogsStmt->fetchAll(PDO::FETCH_ASSOC);
+        $recentLogsStmt = $db->prepare("
+            SELECT a.id, a.action, a.details, a.created_at, u.username, u.first_name, u.last_name, u.role
+            FROM activity_logs a
+            LEFT JOIN users u ON a.user_id = u.id
+            LEFT JOIN users tu ON a.target_user_id = tu.id
+            WHERE a.user_id = ? AND (u.role != 'super_admin' OR u.role IS NULL) AND (tu.role != 'super_admin' OR tu.role IS NULL) AND a.action NOT LIKE 'SUPERADMIN_%'
+            ORDER BY a.id DESC
+            LIMIT 6
+        ");
+        $recentLogsStmt->execute([$userId]);
+        $recentLogs = $recentLogsStmt->fetchAll(PDO::FETCH_ASSOC);
+    } elseif ($role === 'admin') {
+        $todayLogsStmt = $db->query("
+            SELECT COUNT(*) FROM activity_logs a 
+            LEFT JOIN users u ON a.user_id = u.id 
+            LEFT JOIN users tu ON a.target_user_id = tu.id
+            WHERE DATE(a.created_at) = CURDATE() AND (u.role != 'super_admin' OR u.role IS NULL) AND (tu.role != 'super_admin' OR tu.role IS NULL) AND a.action NOT LIKE 'SUPERADMIN_%'
+        ");
+        $todayLogs = (int)$todayLogsStmt->fetchColumn();
+
+        $recentLogsStmt = $db->query("
+            SELECT a.id, a.action, a.details, a.created_at, u.username, u.first_name, u.last_name, u.role
+            FROM activity_logs a
+            LEFT JOIN users u ON a.user_id = u.id
+            LEFT JOIN users tu ON a.target_user_id = tu.id
+            WHERE (u.role != 'super_admin' OR u.role IS NULL) AND (tu.role != 'super_admin' OR tu.role IS NULL) AND a.action NOT LIKE 'SUPERADMIN_%'
+            ORDER BY a.id DESC
+            LIMIT 6
+        ");
+        $recentLogs = $recentLogsStmt->fetchAll(PDO::FETCH_ASSOC);
+    } else {
+        $todayLogsStmt = $db->query("SELECT COUNT(*) FROM activity_logs WHERE DATE(created_at) = CURDATE()");
+        $todayLogs = (int)$todayLogsStmt->fetchColumn();
+
+        $recentLogsStmt = $db->query("
+            SELECT a.id, a.action, a.details, a.created_at, u.username, u.first_name, u.last_name, u.role
+            FROM activity_logs a
+            LEFT JOIN users u ON a.user_id = u.id
+            ORDER BY a.id DESC
+            LIMIT 6
+        ");
+        $recentLogs = $recentLogsStmt->fetchAll(PDO::FETCH_ASSOC);
+    }
 
     sendJsonResponse(true, 'Stats loaded', [
         'stats' => $stats,
@@ -203,7 +241,7 @@ if ($action === 'get_users') {
         if ($filterStatus === 'active') {
             $query .= " AND status IN ('approved', 'active') AND (is_active = 1 OR is_active IS NULL)";
         } elseif ($filterStatus === 'inactive') {
-            $query .= " AND (status = 'inactive' OR is_active = 0)";
+            $query .= " AND (status IN ('inactive', 'suspended', 'blocked') OR is_active = 0)";
         } elseif ($filterStatus === 'suspended') {
             $query .= " AND status IN ('suspended', 'blocked')";
         } elseif ($filterStatus === 'pending') {
@@ -228,6 +266,26 @@ if ($action === 'get_users') {
     $succStmt->execute([$userId]);
     $eligibleCount = (int)$succStmt->fetchColumn();
 
+    // Determine the single Primary / Active Superadmin account
+    $primarySaId = null;
+    if ($activeSaUserId !== null) {
+        $chkActiveSa = $db->prepare("SELECT id FROM users WHERE id = ? AND role = 'super_admin' LIMIT 1");
+        $chkActiveSa->execute([$activeSaUserId]);
+        if ($chkActiveSa->fetch()) {
+            $primarySaId = $activeSaUserId;
+        }
+    }
+    if ($primarySaId === null && $role === 'super_admin') {
+        $primarySaId = (int)$userId;
+    }
+    if ($primarySaId === null) {
+        $firstSaStmt = $db->query("SELECT id FROM users WHERE role = 'super_admin' AND status IN ('approved', 'active') AND (is_active = 1 OR is_active IS NULL) ORDER BY id ASC LIMIT 1");
+        $firstSa = $firstSaStmt->fetch(PDO::FETCH_ASSOC);
+        if ($firstSa) {
+            $primarySaId = (int)$firstSa['id'];
+        }
+    }
+
     $currentSuperadminUser = null;
     $users = [];
     foreach ($rawUsers as $u) {
@@ -236,14 +294,13 @@ if ($action === 'get_users') {
         $uStatus = $u['status'] ?? 'pending';
         $uIsActive = (int)($u['is_active'] ?? 1);
         $isFormerSa = ((int)($u['is_former_superadmin'] ?? 0) === 1);
-        $isCurrentSa = ($uRole === 'super_admin');
+        $isCurrentSa = ($uRole === 'super_admin' && $uid === $primarySaId);
+        $isSecondarySa = ($uRole === 'super_admin' && $uid !== $primarySaId);
 
         // Normalize status representation for frontend
         $displayStatus = 'pending';
-        if ($uStatus === 'inactive' || $uIsActive === 0) {
+        if ($uStatus === 'inactive' || $uStatus === 'suspended' || $uStatus === 'blocked' || $uIsActive === 0) {
             $displayStatus = 'inactive';
-        } elseif ($uStatus === 'suspended' || $uStatus === 'blocked') {
-            $displayStatus = 'suspended';
         } elseif ($uStatus === 'approved' || $uStatus === 'active') {
             $displayStatus = 'active';
         } elseif ($uStatus === 'pending_setup') {
@@ -274,6 +331,7 @@ if ($action === 'get_users') {
             'is_active' => $uIsActive,
             'is_former_superadmin' => $isFormerSa,
             'is_current_superadmin' => $isCurrentSa,
+            'is_secondary_superadmin' => $isSecondarySa,
             'is_active_session' => ($activeSaUserId !== null && $uid === $activeSaUserId),
             'is_me' => ($uid === (int)$userId),
             'is_eligible_successor' => ($uRole === 'admin' && in_array($displayStatus, ['active']) && $uid !== (int)$userId),
@@ -464,12 +522,13 @@ if ($action === 'transfer_superadmin_role') {
 }
 
 if ($action === 'deactivate_account') {
-    requireActionPassword();
     $targetId = (int)($_POST['target_id'] ?? 0);
     $reason = trim(sanitizeInput($_POST['reason'] ?? ''));
     
     if ($targetId <= 0) sendJsonResponse(false, 'Invalid target user ID.');
-    if ($targetId === (int)$userId) sendJsonResponse(false, 'You cannot deactivate your own account.');
+    if ($targetId === (int)$userId) {
+        sendJsonResponse(false, 'The active Superadmin account cannot be deactivated. You must transfer the Superadmin role to an eligible successor first.');
+    }
     if (strlen($reason) < 3) sendJsonResponse(false, 'A reason for deactivation is required (minimum 3 characters).');
     
     $stmt = $db->prepare("SELECT id, username, role, status, is_active FROM users WHERE id = ?");
@@ -477,18 +536,26 @@ if ($action === 'deactivate_account') {
     $targetUser = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$targetUser) sendJsonResponse(false, 'Target account not found.');
     
-    // Cannot deactivate the currently active Superadmin account
+    // Check if target is a Superadmin
     if ($targetUser['role'] === 'super_admin') {
-        sendJsonResponse(false, 'The active Superadmin account cannot be deactivated. You must transfer the Superadmin role to an eligible successor first.');
-    }
-    
-    // Admin privilege check
-    if ($role === 'admin') {
-        if (!in_array('block_unblock_users', $privs)) {
-            sendJsonResponse(false, 'Denied. Missing block_unblock_users privilege.');
+        // Only the active Superadmin can deactivate another Superadmin account
+        if ($role !== 'super_admin') {
+            sendJsonResponse(false, 'Denied. Only the active Superadmin can deactivate another Superadmin account.');
         }
-        if ($targetUser['role'] === 'admin') {
-            sendJsonResponse(false, 'Admins cannot deactivate other Administrator accounts.');
+        // Security check: require active Superadmin password verification and lock ownership
+        requireSuperAdminWithPassword();
+    } else {
+        // Standard password check for non-Superadmin targets
+        requireActionPassword();
+
+        // Admin privilege check
+        if ($role === 'admin') {
+            if (!in_array('block_unblock_users', $privs)) {
+                sendJsonResponse(false, 'Denied. Missing block_unblock_users privilege.');
+            }
+            if ($targetUser['role'] === 'admin') {
+                sendJsonResponse(false, 'Admins cannot deactivate other Administrator accounts.');
+            }
         }
     }
     
@@ -499,11 +566,15 @@ if ($action === 'deactivate_account') {
     // Invalidate target user's active sessions immediately
     $db->prepare("UPDATE login_logs SET time_out = NOW() WHERE user_id = ? AND time_out IS NULL")
        ->execute([$targetId]);
+
+    // Release any super_admin_lock if held by target
+    $db->prepare("UPDATE super_admin_lock SET active_user_id = NULL, login_log_id = NULL, acquired_at = NULL, expires_at = NULL WHERE active_user_id = ?")
+       ->execute([$targetId]);
        
     logActivity(
         $userId, 
         'ACCOUNT_DEACTIVATED', 
-        "Deactivated account '{$targetUser['username']}' [{$targetUser['role']}]. Reason: {$reason}", 
+        "Deactivated {$targetUser['role']} account '{$targetUser['username']}'. Reason: {$reason}", 
         null, 
         $targetId, 
         $reason, 
@@ -516,7 +587,6 @@ if ($action === 'deactivate_account') {
 }
 
 if ($action === 'reactivate_account') {
-    requireActionPassword();
     $targetId = (int)($_POST['target_id'] ?? 0);
     $reason = trim(sanitizeInput($_POST['reason'] ?? ''));
     
@@ -528,22 +598,24 @@ if ($action === 'reactivate_account') {
     $targetUser = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$targetUser) sendJsonResponse(false, 'Target account not found.');
     
-    // Admin privilege check: Admins cannot reactivate Admin or Former Superadmin accounts
-    if ($role === 'admin') {
-        if (!in_array('block_unblock_users', $privs)) {
-            sendJsonResponse(false, 'Denied. Missing block_unblock_users privilege.');
-        }
-        if ($targetUser['role'] === 'admin' || (int)$targetUser['is_former_superadmin'] === 1) {
-            sendJsonResponse(false, 'Only the Superadmin can reactivate an Administrator or Former Superadmin account.');
-        }
-    }
-    
-    // CRITICAL SECURITY RULE:
-    // Reactivating a former Superadmin (or any user) restores their account to Active status
-    // with their approved non-Superadmin role (e.g. Admin or User).
-    // It must NEVER automatically restore the Superadmin role.
+    // Target is a Superadmin
     if ($targetUser['role'] === 'super_admin') {
-        sendJsonResponse(false, 'Target account is already marked as Superadmin.');
+        if ($role !== 'super_admin') {
+            sendJsonResponse(false, 'Denied. Only the active Superadmin can reactivate another Superadmin account.');
+        }
+        requireSuperAdminWithPassword();
+    } else {
+        requireActionPassword();
+
+        // Admin privilege check: Admins cannot reactivate Admin or Former Superadmin accounts
+        if ($role === 'admin') {
+            if (!in_array('block_unblock_users', $privs)) {
+                sendJsonResponse(false, 'Denied. Missing block_unblock_users privilege.');
+            }
+            if ($targetUser['role'] === 'admin' || (int)$targetUser['is_former_superadmin'] === 1) {
+                sendJsonResponse(false, 'Only the Superadmin can reactivate an Administrator or Former Superadmin account.');
+            }
+        }
     }
     
     $prevStatus = $targetUser['status'];
@@ -681,14 +753,58 @@ if ($action === 'get_user_details') {
     $u = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$u) sendJsonResponse(false, 'User not found.');
     
-    // Check if user is the current active Superadmin
-    $isCurrentSa = ($u['role'] === 'super_admin');
-    $isFormerSa = ((int)$u['is_former_superadmin'] === 1);
-    
+    // Check active Superadmin lock session
+    $activeSaUserId = null;
+    $lockStmt = $db->query("SELECT active_user_id, expires_at FROM super_admin_lock WHERE id = 1");
+    $lockRow = $lockStmt ? $lockStmt->fetch(PDO::FETCH_ASSOC) : null;
+    if ($lockRow && !empty($lockRow['active_user_id']) && strtotime($lockRow['expires_at']) > time()) {
+        $activeSaUserId = (int)$lockRow['active_user_id'];
+    }
+
+    $primarySaId = null;
+    if ($activeSaUserId !== null) {
+        $chkActiveSa = $db->prepare("SELECT id FROM users WHERE id = ? AND role = 'super_admin' LIMIT 1");
+        $chkActiveSa->execute([$activeSaUserId]);
+        if ($chkActiveSa->fetch()) {
+            $primarySaId = $activeSaUserId;
+        }
+    }
+    if ($primarySaId === null && $role === 'super_admin') {
+        $primarySaId = (int)$userId;
+    }
+    if ($primarySaId === null) {
+        $firstSaStmt = $db->query("SELECT id FROM users WHERE role = 'super_admin' AND status IN ('approved', 'active') AND (is_active = 1 OR is_active IS NULL) ORDER BY id ASC LIMIT 1");
+        $firstSa = $firstSaStmt->fetch(PDO::FETCH_ASSOC);
+        if ($firstSa) {
+            $primarySaId = (int)$firstSa['id'];
+        }
+    }
+
+    $uRole = $u['role'] ?? 'user';
+    $uStatus = $u['status'] ?? 'pending';
+    $uIsActive = (int)($u['is_active'] ?? 1);
+
+    $isCurrentSa = ($uRole === 'super_admin' && (int)$u['id'] === $primarySaId);
+    $isFormerSa = ((int)($u['is_former_superadmin'] ?? 0) === 1);
+    $isActiveSession = ($activeSaUserId !== null && (int)$u['id'] === $activeSaUserId);
+
+    $displayStatus = 'Pending';
+    if ($uStatus === 'inactive' || $uStatus === 'suspended' || $uStatus === 'blocked' || $uIsActive === 0) {
+        $displayStatus = 'Inactive';
+    } elseif ($uStatus === 'approved' || $uStatus === 'active') {
+        $displayStatus = 'Active';
+    } elseif ($uStatus === 'pending_setup') {
+        $displayStatus = 'Pending Setup';
+    }
+
+    $isEligibleSuccessor = ($uRole === 'admin' && strtolower($displayStatus) === 'active' && (int)$u['id'] !== (int)$userId);
+
     // Fetch succession history if relevant
     $successions = [];
     $succStmt = $db->prepare("
-        SELECT s.id, s.outgoing_superadmin_id, s.incoming_superadmin_id, s.reason, s.former_superadmin_status, s.created_at,
+        SELECT s.id, s.outgoing_superadmin_id, s.outgoing_superadmin_id as outgoing_user_id,
+               s.incoming_superadmin_id, s.incoming_superadmin_id as incoming_user_id,
+               s.reason, s.former_superadmin_status, s.created_at,
                out_u.username as outgoing_username, in_u.username as incoming_username
         FROM superadmin_succession_logs s
         LEFT JOIN users out_u ON s.outgoing_superadmin_id = out_u.id
@@ -701,11 +817,20 @@ if ($action === 'get_user_details') {
     
     $privList = $u['privileges'] ? json_decode($u['privileges'], true) : [];
     if (!is_array($privList)) $privList = [];
-    
+
+    $u['display_status'] = $displayStatus;
+    $u['is_current_superadmin'] = $isCurrentSa;
+    $u['is_former_superadmin'] = $isFormerSa;
+    $u['is_active_session'] = $isActiveSession;
+    $u['is_eligible_successor'] = $isEligibleSuccessor;
+
     sendJsonResponse(true, 'User details loaded', [
         'user' => $u,
         'is_current_superadmin' => $isCurrentSa,
         'is_former_superadmin' => $isFormerSa,
+        'is_active_session' => $isActiveSession,
+        'is_eligible_successor' => $isEligibleSuccessor,
+        'display_status' => $displayStatus,
         'privileges_list' => $privList,
         'succession_history' => $successions
     ]);
@@ -717,19 +842,35 @@ if ($action === 'get_user_audit_history') {
     
     $targetId = (int)($_GET['target_id'] ?? $_POST['target_id'] ?? $_GET['user_id'] ?? $_POST['user_id'] ?? 0);
     if ($targetId <= 0) sendJsonResponse(false, 'Invalid user ID.');
+
+    // Fetch target user to verify permissions
+    $stmtTarget = $db->prepare("SELECT id, role, username FROM users WHERE id = ?");
+    $stmtTarget->execute([$targetId]);
+    $targetUser = $stmtTarget->fetch(PDO::FETCH_ASSOC);
+    if (!$targetUser) sendJsonResponse(false, 'Target user not found.');
+
+    // Super Admin activity logs must not be visible to regular users or administrators
+    if ($role !== 'super_admin' && $targetUser['role'] === 'super_admin') {
+        sendJsonResponse(false, 'Access denied. Super Admin audit history cannot be viewed by Administrators.');
+    }
     
-    $stmt = $db->prepare("
+    $query = "
         SELECT a.id, a.user_id, a.target_user_id, a.action, a.details, a.reason, a.outcome, a.previous_state, a.new_state, a.created_at,
                u.username as actor_username, u.role as actor_role,
                tu.username as target_username
         FROM activity_logs a
         LEFT JOIN users u ON a.user_id = u.id
         LEFT JOIN users tu ON a.target_user_id = tu.id
-        WHERE a.user_id = ? OR a.target_user_id = ?
-        ORDER BY a.id DESC
-        LIMIT 50
-    ");
-    $stmt->execute([$targetId, $targetId]);
+        WHERE (a.user_id = ? OR a.target_user_id = ?)
+    ";
+    $params = [$targetId, $targetId];
+    if ($role !== 'super_admin') {
+        $query .= " AND (u.role != 'super_admin' OR u.role IS NULL) AND (tu.role != 'super_admin' OR tu.role IS NULL) AND a.action NOT LIKE 'SUPERADMIN_%'";
+    }
+    $query .= " ORDER BY a.id DESC LIMIT 50";
+
+    $stmt = $db->prepare($query);
+    $stmt->execute($params);
     $logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     sendJsonResponse(true, 'Audit history loaded', [
@@ -822,24 +963,44 @@ if ($action === 'update_user_role') {
 }
 
 if ($action === 'get_user_privileges') {
-    requireSuperAdmin();
+    if ($role !== 'super_admin' && $role !== 'admin') {
+        sendJsonResponse(false, 'Permission denied');
+    }
+    if ($role === 'admin' && !in_array('edit_manage_accounts', $privs) && !in_array('view_accounts', $privs)) {
+        sendJsonResponse(false, 'Denied. Missing required privilege.');
+    }
     $targetId = (int)($_GET['target_id'] ?? $_POST['target_id'] ?? $_GET['user_id'] ?? $_POST['user_id'] ?? 0);
     $stmt = $db->prepare("SELECT id, id_number, username, first_name, last_name, role, privileges FROM users WHERE id = ?");
     $stmt->execute([$targetId]);
     $targetUser = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$targetUser) sendJsonResponse(false, 'User not found');
     
-    $privs = $targetUser['privileges'] ? json_decode($targetUser['privileges'], true) : [];
-    if (!is_array($privs)) $privs = [];
+    // Admins cannot inspect Super Admin privileges
+    if ($role === 'admin' && $targetUser['role'] === 'super_admin') {
+        sendJsonResponse(false, 'Access denied.');
+    }
+    
+    $userPrivs = $targetUser['privileges'] ? json_decode($targetUser['privileges'], true) : [];
+    if (!is_array($userPrivs)) $userPrivs = [];
     
     sendJsonResponse(true, 'Success', [
         'user' => $targetUser,
-        'privileges' => $privs
+        'privileges' => $userPrivs
     ]);
 }
 
 if ($action === 'update_user_privileges') {
-    requireSuperAdminWithPassword();
+    if ($role === 'super_admin') {
+        requireSuperAdminWithPassword();
+    } elseif ($role === 'admin') {
+        if (!in_array('edit_manage_accounts', $privs)) {
+            sendJsonResponse(false, 'Denied. Missing edit_manage_accounts privilege.');
+        }
+        requireActionPassword();
+    } else {
+        sendJsonResponse(false, 'Permission denied');
+    }
+
     $targetId = (int)($_POST['target_id'] ?? 0);
     $privilegesRaw = $_POST['privileges'] ?? '[]';
     $privileges = is_array($privilegesRaw) ? $privilegesRaw : json_decode($privilegesRaw, true);
@@ -865,6 +1026,11 @@ if ($action === 'update_user_privileges') {
     // Prevent modifying Super Admin permissions (master clearance)
     if ($targetUser['role'] === 'super_admin') {
         sendJsonResponse(false, 'Super Admin accounts hold permanent master clearance. Individual privileges cannot be modified.');
+    }
+
+    // Admins cannot modify other Administrators' privileges
+    if ($role === 'admin' && $targetUser['role'] === 'admin') {
+        sendJsonResponse(false, 'Denied. Admins cannot modify permissions of other Administrators.');
     }
     
     $privsJson = json_encode(array_values($privileges));
@@ -1036,14 +1202,19 @@ if ($action === 'get_logs') {
               WHERE 1=1";
     $params = [];
     
-    // Visibility
+    // Visibility and privacy enforcement
     if ($role === 'admin') {
-        // Can view admin, users, and system actions (not super admin specific)
-        $query .= " AND (u.role != 'super_admin' OR u.role IS NULL)";
+        if (!in_array('view_activity_logs', $privs) && !in_array('view_accounts', $privs)) {
+            sendJsonResponse(false, 'Access denied. Missing privilege to view activity logs.');
+        }
+        // Super Admin activity logs must not be visible to administrators
+        $query .= " AND (u.role != 'super_admin' OR u.role IS NULL) AND (tu.role != 'super_admin' OR tu.role IS NULL) AND a.action NOT LIKE 'SUPERADMIN_%'";
     } elseif ($role === 'user') {
-        // Can view only self
-        $query .= " AND a.user_id = ?";
+        // Regular users must ONLY be able to view their own activity logs
+        $query .= " AND a.user_id = ? AND (u.role != 'super_admin' OR u.role IS NULL) AND (tu.role != 'super_admin' OR tu.role IS NULL) AND a.action NOT LIKE 'SUPERADMIN_%'";
         $params[] = $userId;
+    } elseif ($role !== 'super_admin') {
+        sendJsonResponse(false, 'Access denied.');
     }
     
     // Filtering
@@ -1110,7 +1281,7 @@ if ($action === 'create_privileged_account' || $action === 'create_account') {
     $email = strtolower(trim($_POST['email'] ?? ''));
     $password = (string)($_POST['password'] ?? '');
     if (trim($password) === '') {
-        $password = '@Abcde12345';
+        $password = generateRandom8CharPassword();
     }
     $customIdNumber = trim(sanitizeInput($_POST['id_number'] ?? ''));
     
@@ -1150,7 +1321,22 @@ if ($action === 'create_privileged_account' || $action === 'create_account') {
         sendJsonResponse(false, 'The email address "' . $email . '" is already registered.');
     }
 
-    // Direct creation of Super Admin account: automatically grant full system clearance
+    // System-wide supported privileges whitelist
+    $allowedPrivileges = [
+        'profile_management',
+        'change_password',
+        'view_accounts',
+        'create_accounts',
+        'edit_manage_accounts',
+        'block_unblock_users',
+        'registration_approval',
+        'account_deletion_requests',
+        'view_activity_logs',
+        'export_activity_logs'
+    ];
+    $privileges = array_values(array_intersect($privileges, $allowedPrivileges));
+
+    // Assign appropriate privileges for newly created account roles if not custom-specified
     $deactivateOnLogout = false;
     if ($accountRole === 'super_admin') {
         $handoverConfirmed = isset($_POST['handover_confirmed']) && ($_POST['handover_confirmed'] === '1' || $_POST['handover_confirmed'] === 'true');
@@ -1164,11 +1350,34 @@ if ($action === 'create_privileged_account' || $action === 'create_account') {
             'change_password',
             'profile_management',
             'view_accounts',
+            'create_accounts',
             'edit_manage_accounts',
             'block_unblock_users',
             'registration_approval',
-            'account_deletion_requests'
+            'account_deletion_requests',
+            'view_activity_logs',
+            'export_activity_logs'
         ];
+    } elseif ($accountRole === 'admin') {
+        if (empty($privileges)) {
+            $privileges = [
+                'change_password',
+                'profile_management',
+                'view_accounts',
+                'edit_manage_accounts',
+                'block_unblock_users',
+                'registration_approval',
+                'account_deletion_requests',
+                'view_activity_logs'
+            ];
+        }
+    } else {
+        // Enforce least privilege: standard users cannot receive administrative privileges
+        $userAllowed = ['profile_management', 'change_password'];
+        $privileges = array_values(array_intersect($privileges, $userAllowed));
+        if (empty($privileges)) {
+            $privileges = $userAllowed;
+        }
     }
 
     // Handle ID Number
@@ -1277,12 +1486,66 @@ if ($action === 'create_privileged_account' || $action === 'create_account') {
         sendJsonResponse(false, 'Failed to create account: ' . $e->getMessage());
     }
 
-    sendJsonResponse(true, 'Account created successfully with status Pending Setup!', [
+    // Build login URL for credentials email
+    $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
+    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    $scriptDir = dirname(dirname($_SERVER['SCRIPT_NAME'] ?? '/Security_II/php/admin_actions.php'));
+    $baseDir = rtrim(str_replace('\\', '/', $scriptDir), '/');
+    $loginUrl = $protocol . $host . $baseDir . '/pages/login.php';
+
+    // Send credentials email to the new account's email
+    $mailResult = sendNewAccountCredentialsEmail(
+        $email,
+        $username,
+        $password,
+        $newIdNumber,
+        $accountRole,
+        $loginUrl
+    );
+
+    $emailSent = !empty($mailResult['success']);
+    $emailError = $mailResult['error'] ?? null;
+
+    // Log email activity
+    $clientIp = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+    try {
+        if ($emailSent) {
+            $pdo->prepare("
+                INSERT INTO activity_logs (user_id, target_user_id, action, details, outcome, ip_address, created_at)
+                VALUES (?, ?, 'EMAIL_SENT', ?, 'SUCCESS', ?, NOW())
+            ")->execute([
+                $userId,
+                $newId,
+                "Sent initial credentials email to '{$email}' for @{$username}",
+                $clientIp
+            ]);
+        } else {
+            $pdo->prepare("
+                INSERT INTO activity_logs (user_id, target_user_id, action, details, outcome, ip_address, created_at)
+                VALUES (?, ?, 'EMAIL_FAILED', ?, 'FAILURE', ?, NOW())
+            ")->execute([
+                $userId,
+                $newId,
+                "Failed to send credentials email to '{$email}': " . ($emailError ?: 'Unknown error'),
+                $clientIp
+            ]);
+        }
+    } catch (Exception $e) {
+        error_log("Failed to log email activity: " . $e->getMessage());
+    }
+
+    $statusMsg = $emailSent
+        ? "Account created successfully for @{$username}! Login credentials have been sent to {$email}."
+        : "Account created successfully for @{$username}, but credentials email could not be sent: " . ($emailError ?: 'Delivery failed');
+
+    sendJsonResponse(true, $statusMsg, [
         'id' => $newId,
         'username' => $username,
         'email' => $email,
         'id_number' => $newIdNumber,
         'role' => $accountRole,
+        'email_sent' => $emailSent,
+        'email_error' => $emailError,
         'deactivate_on_logout' => $deactivateOnLogout,
         'transferred' => false
     ]);

@@ -377,11 +377,11 @@ if (basename(__FILE__) === basename($_SERVER['SCRIPT_FILENAME'] ?? '')) {
     $confirmPassword = $rawConfirmPassword;
 
     // ── Step 3: Security Questions ─────────────────────────────────────────────────
-    $q1 = trim(sanitizeInput($payload['q1'] ?? ''));
+    $q1 = trim(htmlspecialchars_decode(strip_tags((string)($payload['q1'] ?? '')), ENT_QUOTES));
     $a1 = trim((string)($payload['a1'] ?? ''));
-    $q2 = trim(sanitizeInput($payload['q2'] ?? ''));
+    $q2 = trim(htmlspecialchars_decode(strip_tags((string)($payload['q2'] ?? '')), ENT_QUOTES));
     $a2 = trim((string)($payload['a2'] ?? ''));
-    $q3 = trim(sanitizeInput($payload['q3'] ?? ''));
+    $q3 = trim(htmlspecialchars_decode(strip_tags((string)($payload['q3'] ?? '')), ENT_QUOTES));
     $a3 = trim((string)($payload['a3'] ?? ''));
 
     if ($q1 === '') $fieldErrors['q1'] = 'Please select Question 1';

@@ -318,12 +318,15 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   padding-right: 2.8rem;
 }
 
-.pwd-eye-btn {
+.pwd-eye-btn,
+.show-password {
   position: absolute;
-  right: 8px;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
   background: transparent;
   border: none;
-  color: var(--text-muted);
+  color: var(--primary, #00eaff);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -331,11 +334,13 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   padding: 6px;
   border-radius: 7px;
   transition: all 0.2s ease;
+  z-index: 5;
 }
 
-.pwd-eye-btn:hover {
-  color: var(--primary);
-  background: var(--bg-surface-hover);
+.pwd-eye-btn:hover,
+.show-password:hover {
+  background: rgba(0, 234, 255, 0.12);
+  transform: translateY(-50%) scale(1.08);
 }
 
 /* Password Strength Meter */
@@ -1154,20 +1159,24 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 .modal-pw-toggle {
   position: absolute;
   right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
   background: transparent;
   border: none;
-  color: var(--text-muted);
+  color: var(--primary, #00eaff);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 6px;
   border-radius: 6px;
-  transition: color 0.15s ease;
+  transition: all 0.2s ease;
+  z-index: 5;
 }
 
 .modal-pw-toggle:hover {
-  color: var(--primary);
+  background: rgba(0, 234, 255, 0.12);
+  transform: translateY(-50%) scale(1.08);
 }
 
 .modal-field-err {
@@ -1354,3 +1363,61 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+/* ==============================================================================
+   DARK MODE HIGH-CONTRAST TYPOGRAPHY & LETTER READABILITY FIXES
+   ============================================================================== */
+[data-theme="dark"] .custom-input.input-mono {
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] .profile-handle {
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] .meta-val.id-mono {
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] .role-badge.admin {
+  color: #ffffff !important;
+  background: rgba(99, 102, 241, 0.25) !important;
+  border-color: rgba(99, 102, 241, 0.45) !important;
+}
+
+[data-theme="dark"] .profile-clearance-box.admin {
+  color: #ffffff !important;
+  background: rgba(99, 102, 241, 0.2) !important;
+  border-color: rgba(99, 102, 241, 0.4) !important;
+}
+
+[data-theme="dark"] .btn-cyber-edit:hover {
+  color: #ffffff !important;
+}
+
+/* ==============================================================================
+   SECURITY QUESTION MUTUALLY EXCLUSIVE OPTION HIDING & BLUR FALLBACK
+   ============================================================================== */
+select.sq-select option:disabled,
+.custom-select option:disabled,
+select.cyber-input option:disabled {
+  color: var(--text-muted, #64748b) !important;
+  background-color: var(--bg-surface-subtle, rgba(15, 23, 42, 0.8)) !important;
+  opacity: 0.35 !important;
+  font-style: italic !important;
+  cursor: not-allowed !important;
+}
+
+select.sq-select option[hidden],
+select.sq-select option.sq-option-hidden,
+.custom-select option[hidden],
+.custom-select option.sq-option-hidden,
+select.cyber-input option[hidden],
+select.cyber-input option.sq-option-hidden {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  height: 0 !important;
+  pointer-events: none !important;
+}
+

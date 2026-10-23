@@ -834,6 +834,14 @@
   font-weight: 600;
 }
 
+[data-theme="dark"] .ca-mono,
+[data-theme="dark"] .ca-input.ca-mono,
+[data-theme="dark"] input.ca-mono,
+[data-theme="dark"] #caIdNumber,
+[data-theme="dark"] #caPassword {
+  color: #ffffff !important;
+}
+
 .ca-input[readonly] {
   background: var(--bg-surface-hover);
   cursor: default;
@@ -927,7 +935,8 @@
   padding-right: 2.85rem;
 }
 
-.ca-eye-btn {
+.ca-eye-btn,
+.ca-copy-btn {
   position: absolute;
   right: 0.5rem;
   top: 50%;
@@ -1224,3 +1233,108 @@
     width: 100%;
   }
 }
+
+/* ==============================================================================
+   DARK MODE HIGH-CONTRAST TYPOGRAPHY & LETTER READABILITY FIXES
+   Ensures all violet / dark letters, labels, inputs and badges render crisp white
+   ============================================================================== */
+[data-theme="dark"] .ca-section-title {
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] .ca-section-title svg {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
+}
+
+[data-theme="dark"] .ca-header-icon {
+  color: #ffffff !important;
+  background: rgba(99, 102, 241, 0.25) !important;
+  border-color: rgba(99, 102, 241, 0.45) !important;
+}
+
+[data-theme="dark"] .ca-header-icon svg {
+  stroke: #ffffff !important;
+}
+
+[data-theme="dark"] .ca-reset-link {
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.22) !important;
+}
+
+[data-theme="dark"] .ca-reset-link svg {
+  stroke: #ffffff !important;
+}
+
+[data-theme="dark"] .ca-reset-link:hover {
+  background: var(--primary) !important;
+  color: #ffffff !important;
+  border-color: var(--primary) !important;
+}
+
+[data-theme="dark"] .ca-input,
+[data-theme="dark"] .ca-select,
+[data-theme="dark"] .ca-input[readonly] {
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] .ca-select:focus ~ .ca-select-arrow {
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] .portal-brand-badge,
+[data-theme="dark"] .portal-tag,
+[data-theme="dark"] .step-required-badge,
+[data-theme="dark"] .section-tag {
+  color: #ffffff !important;
+  background: rgba(99, 102, 241, 0.25) !important;
+  border-color: rgba(99, 102, 241, 0.45) !important;
+}
+
+[data-theme="dark"] .role-card.active .role-title {
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] .module-card-title {
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] .module-card-title svg {
+  stroke: #ffffff !important;
+}
+
+[data-theme="dark"] .portal-back-btn:hover {
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] .pwd-toggle-btn:hover {
+  color: #ffffff !important;
+}
+
+/* ==============================================================================
+   SECURITY QUESTION MUTUALLY EXCLUSIVE OPTION HIDING & BLUR FALLBACK
+   ============================================================================== */
+select.sq-select option:disabled,
+.custom-select option:disabled,
+select.cyber-input option:disabled {
+  color: var(--text-muted, #64748b) !important;
+  background-color: var(--bg-surface-subtle, rgba(15, 23, 42, 0.8)) !important;
+  opacity: 0.35 !important;
+  font-style: italic !important;
+  cursor: not-allowed !important;
+}
+
+select.sq-select option[hidden],
+select.sq-select option.sq-option-hidden,
+.custom-select option[hidden],
+.custom-select option.sq-option-hidden,
+select.cyber-input option[hidden],
+select.cyber-input option.sq-option-hidden {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  height: 0 !important;
+  pointer-events: none !important;
+}
+

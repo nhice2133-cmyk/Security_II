@@ -21,18 +21,97 @@ window.customPrompt = function(msg) {
 let alertResolve = null;
 let alertEnterHandler = null;
 
-window.customAlert = function(msg) {
+window.customAlert = function(msg, type = 'info', title = null, subtitle = null) {
     return new Promise(resolve => {
-        document.getElementById('customAlertMessage').innerText = msg;
+        const msgEl = document.getElementById('customAlertMessage');
+        if (msgEl) msgEl.innerText = msg;
+
         const modal = document.getElementById('customAlertModal');
+        if (!modal) {
+            console.warn('customAlertModal not found:', msg);
+            resolve();
+            return;
+        }
+
+        const iconContainer = document.getElementById('customAlertIcon');
+        const titleEl = document.getElementById('customAlertTitle');
+        const subtitleEl = document.getElementById('customAlertSubtitle');
+        const badge = document.getElementById('customAlertBadge');
+        const okBtn = document.getElementById('customAlertOkBtn') || modal.querySelector('button');
+
+        const configs = {
+            success: {
+                title: title || 'SUCCESS',
+                subtitle: subtitle || 'Operation completed successfully',
+                icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
+                badgeBg: 'rgba(16, 185, 129, 0.16)',
+                badgeBorder: 'rgba(16, 185, 129, 0.35)',
+                color: '#10b981',
+                btnBg: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                btnShadow: '0 4px 14px rgba(16, 185, 129, 0.35)'
+            },
+            error: {
+                title: title || 'SYSTEM ERROR',
+                subtitle: subtitle || 'Action could not be completed',
+                icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
+                badgeBg: 'rgba(239, 68, 68, 0.16)',
+                badgeBorder: 'rgba(239, 68, 68, 0.35)',
+                color: '#ef4444',
+                btnBg: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                btnShadow: '0 4px 14px rgba(239, 68, 68, 0.35)'
+            },
+            warning: {
+                title: title || 'ATTENTION REQUIRED',
+                subtitle: subtitle || 'Please review required details',
+                icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+                badgeBg: 'rgba(245, 158, 11, 0.16)',
+                badgeBorder: 'rgba(245, 158, 11, 0.35)',
+                color: '#f59e0b',
+                btnBg: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                btnShadow: '0 4px 14px rgba(245, 158, 11, 0.35)'
+            },
+            info: {
+                title: title || 'SYSTEM NOTIFICATION',
+                subtitle: subtitle || 'CyberAuth Security Advisory',
+                icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>',
+                badgeBg: 'rgba(59, 130, 246, 0.16)',
+                badgeBorder: 'rgba(59, 130, 246, 0.35)',
+                color: '#3b82f6',
+                btnBg: '',
+                btnShadow: ''
+            }
+        };
+
+        const cfg = configs[type] || configs.info;
+        if (titleEl) titleEl.textContent = cfg.title;
+        if (subtitleEl) subtitleEl.textContent = cfg.subtitle;
+        if (badge) {
+            badge.style.background = cfg.badgeBg;
+            badge.style.borderColor = cfg.badgeBorder;
+            badge.style.color = cfg.color;
+        }
+        if (iconContainer) iconContainer.innerHTML = cfg.icon;
+
+        if (okBtn) {
+            if (cfg.btnBg) {
+                okBtn.style.background = cfg.btnBg;
+                okBtn.style.boxShadow = cfg.btnShadow;
+                okBtn.style.borderColor = 'transparent';
+                okBtn.style.color = '#ffffff';
+            } else {
+                okBtn.style.background = '';
+                okBtn.style.boxShadow = '';
+                okBtn.style.borderColor = '';
+                okBtn.style.color = '';
+            }
+        }
+
         modal.style.display = 'flex';
-        
-        const okBtn = modal.querySelector('button');
-        if (okBtn) setTimeout(() => okBtn.focus(), 10);
+        if (okBtn) setTimeout(() => okBtn.focus(), 25);
 
         if (alertEnterHandler) document.removeEventListener('keydown', alertEnterHandler);
         alertEnterHandler = function(e) {
-            if (e.key === 'Enter') {
+            if (e.key === 'Enter' || e.key === 'Escape') {
                 e.preventDefault();
                 closeCustomAlert();
             }
@@ -47,7 +126,8 @@ window.customAlert = function(msg) {
     });
 };
 window.closeCustomAlert = function() {
-    document.getElementById('customAlertModal').style.display = 'none';
+    const modal = document.getElementById('customAlertModal');
+    if (modal) modal.style.display = 'none';
     if (alertResolve) { alertResolve(); alertResolve = null; }
 };
 
@@ -260,6 +340,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    // Succession checkbox confirmation toggle listener
+    const succCb = document.getElementById('succConfirmCheckbox');
+    if (succCb) {
+        succCb.addEventListener('change', onSuccConfirmCheckboxChange);
+    }
 });
 
 async function loadDashboardOverview() {
@@ -387,11 +473,22 @@ async function apiCall(action, data = {}) {
     if (csrfMeta) {
         formData.append('csrf_token', csrfMeta.getAttribute('content'));
     }
-    const response = await fetch('../php/admin_actions.php', {
-        method: 'POST',
-        body: formData
-    });
-    return await response.json();
+    try {
+        const response = await fetch('../php/admin_actions.php', {
+            method: 'POST',
+            body: formData
+        });
+        const text = await response.text();
+        try {
+            return JSON.parse(text);
+        } catch (jsonErr) {
+            console.error('API call (' + action + ') failed to parse JSON response:', text);
+            return { success: false, message: 'Server communication error: ' + (text.slice(0, 100) || response.statusText) };
+        }
+    } catch (netErr) {
+        console.error('API call (' + action + ') network request failed:', netErr);
+        throw netErr;
+    }
 }
 
 // ----------------------------------------------------
@@ -562,20 +659,19 @@ async function loadUsers(page = null, isSilent = false) {
                 const displayStatus = u.display_status || u.status || 'pending';
                 const normStatus = displayStatus.toLowerCase();
                 const isStatusActive = (normStatus === 'active' || normStatus === 'approved');
-                const isStatusInactive = (normStatus === 'inactive');
-                const isStatusSuspended = (normStatus === 'suspended' || normStatus === 'blocked');
+                const isStatusInactive = (normStatus === 'inactive' || normStatus === 'suspended' || normStatus === 'blocked');
                 const isStatusPending = (normStatus === 'pending' || normStatus === 'pending_setup');
 
-                const canEdit = isSuperAdmin || (isAdmin && userPrivileges.includes('edit_manage_accounts') && !isTargetCurrentSa);
-                const canManagePriv = (isSuperAdmin && !isTargetCurrentSa);
+                const isTargetAdmin = (u.role || '').toLowerCase() === 'admin';
+                const isTargetSa = (u.role || '').toLowerCase() === 'super_admin';
+                const canEdit = isSuperAdmin ? !isTargetCurrentSa : (isAdmin && userPrivileges.includes('edit_manage_accounts') && !isTargetSa);
+                const canManagePriv = isSuperAdmin ? !isTargetCurrentSa : (isAdmin && userPrivileges.includes('edit_manage_accounts') && !isTargetSa && !isTargetAdmin);
                 const isEligibleSuccessor = Boolean(u.is_eligible_successor || ((u.role || '').toLowerCase() === 'admin' && isStatusActive && !isTargetCurrentSa && !u.is_me));
                 const canTransfer = isSuperAdmin && isEligibleSuccessor && !isTargetCurrentSa;
-                const canDeactivate = (isSuperAdmin || (isAdmin && userPrivileges.includes('block_unblock_users'))) && isStatusActive && !isTargetCurrentSa;
-                const canReactivate = (isSuperAdmin || (isAdmin && userPrivileges.includes('block_unblock_users'))) && isStatusInactive;
-                const canSuspend = (isSuperAdmin || (isAdmin && userPrivileges.includes('block_unblock_users'))) && (isStatusActive || isStatusPending) && !isTargetCurrentSa;
-                const canRestore = (isSuperAdmin || (isAdmin && userPrivileges.includes('block_unblock_users'))) && isStatusSuspended;
+                const canDeactivate = (isSuperAdmin ? (!isTargetCurrentSa && !u.is_me) : (isAdmin && userPrivileges.includes('block_unblock_users') && !isTargetSa && !isTargetAdmin)) && isStatusActive;
+                const canReactivate = (isSuperAdmin ? (!isTargetCurrentSa && !u.is_me) : (isAdmin && userPrivileges.includes('block_unblock_users') && !isTargetSa && !isTargetFormerSa)) && isStatusInactive;
                 const canApprove = isSuperAdmin || (isAdmin && userPrivileges.includes('registration_approval'));
-                const canBlock = isSuperAdmin || (isAdmin && userPrivileges.includes('block_unblock_users') && !isTargetCurrentSa);
+                const canBlock = isSuperAdmin || (isAdmin && userPrivileges.includes('block_unblock_users') && !isTargetCurrentSa && !isTargetSa);
 
                 const fullName = ((u.first_name || '') + ' ' + (u.last_name || '')).trim() || u.username;
 
@@ -595,7 +691,7 @@ async function loadUsers(page = null, isSilent = false) {
                 }
 
                 // 1. Primary Action: View Details
-                const viewBtn = makeBtn('👁️ View', 'btn-action-view', 'view_details', 'View Comprehensive Account Dossier');
+                const viewBtn = makeBtn('View', 'btn-action-view', 'view_details', 'View Comprehensive Account Dossier');
                 actionsWrapper.appendChild(viewBtn);
 
                 // 2. Primary Action: Edit User
@@ -605,17 +701,10 @@ async function loadUsers(page = null, isSilent = false) {
                     editBtn.dataset.lastName = u.last_name || '';
                     editBtn.dataset.email = u.email || '';
                     editBtn.dataset.phone = u.phone_number || '';
+                    editBtn.dataset.username = u.username || '';
+                    editBtn.dataset.role = u.role || '';
+                    editBtn.dataset.idno = u.id_number || '----';
                     actionsWrapper.appendChild(editBtn);
-                }
-
-                // 3. Primary Action: Manage Privileges
-                if (canManagePriv) {
-                    const privBtn = makeBtn('🛡️ Priv', 'btn-action-priv', 'privileges', 'Manage Account Privileges');
-                    privBtn.dataset.username = u.username || '';
-                    privBtn.dataset.role = u.role || '';
-                    privBtn.dataset.fullname = fullName;
-                    privBtn.dataset.idno = u.id_number || '----';
-                    actionsWrapper.appendChild(privBtn);
                 }
 
                 // Dropdown Menu: Grouped into sleek '•••' menu
@@ -651,6 +740,8 @@ async function loadUsers(page = null, isSilent = false) {
                     item.dataset.role = u.role || '';
                     item.dataset.status = displayStatus;
                     item.dataset.formerSa = isTargetFormerSa ? '1' : '0';
+                    item.dataset.username = u.username || '';
+                    item.dataset.idno = u.id_number || '----';
                     if (title) item.title = title;
                     return item;
                 }
@@ -661,7 +752,7 @@ async function loadUsers(page = null, isSilent = false) {
                 if (isTargetCurrentSa) {
                     const saHeader = document.createElement('div');
                     saHeader.className = 'dropdown-sa-header';
-                    saHeader.innerHTML = '👑 Current Superadmin (Active)';
+                    saHeader.innerHTML = '👑 Primary Superadmin (Active)';
                     menu.appendChild(saHeader);
                     hasSecondary = true;
                 }
@@ -672,21 +763,13 @@ async function loadUsers(page = null, isSilent = false) {
                     hasSecondary = true;
                 }
 
-                // Account Status Actions
+                // Account Status Actions (Deactivate / Reactivate)
                 if (canDeactivate) {
                     menu.appendChild(makeDropdownItem('<span>⏸️</span> Deactivate Account', 'item-deactivate', 'deactivate', 'Deactivate account login access'));
                     hasSecondary = true;
                 }
                 if (canReactivate) {
                     menu.appendChild(makeDropdownItem('<span>▶️</span> Reactivate Account', 'item-reactivate', 'reactivate', isTargetFormerSa ? 'Reactivate as Admin (does not grant Superadmin)' : 'Reactivate account'));
-                    hasSecondary = true;
-                }
-                if (canSuspend) {
-                    menu.appendChild(makeDropdownItem('<span>🚫</span> Suspend Account', 'item-suspend', 'suspend', 'Place account under administrative suspension'));
-                    hasSecondary = true;
-                }
-                if (canRestore) {
-                    menu.appendChild(makeDropdownItem('<span>🔓</span> Restore Account', 'item-restore', 'restore', 'Lift suspension and restore active status'));
                     hasSecondary = true;
                 }
 
@@ -758,6 +841,17 @@ async function loadUsers(page = null, isSilent = false) {
                     hasSecondary = true;
                 }
 
+                // Edit Privileges option in dropdown menu
+                if (canManagePriv) {
+                    if (hasSecondary) {
+                        const div = document.createElement('div');
+                        div.className = 'dropdown-divider';
+                        menu.appendChild(div);
+                    }
+                    menu.appendChild(makeDropdownItem('<span>🛡️</span> Edit Privileges', 'item-privileges', 'privileges', 'Configure account module privileges'));
+                    hasSecondary = true;
+                }
+
                 // View Audit History (always available for admins)
                 if (hasSecondary) {
                     const div = document.createElement('div');
@@ -780,8 +874,6 @@ async function loadUsers(page = null, isSilent = false) {
                     statusBadgeHtml = '<span class="user-status-badge status-active">Active</span>';
                 } else if (isStatusInactive) {
                     statusBadgeHtml = '<span class="user-status-badge status-inactive">Inactive</span>';
-                } else if (isStatusSuspended) {
-                    statusBadgeHtml = '<span class="user-status-badge status-suspended">Suspended</span>';
                 } else if (normStatus === 'pending_setup') {
                     statusBadgeHtml = '<span class="user-status-badge status-pending-setup" title="Account created — needs to login first to complete setup">Pending Setup</span>';
                 } else {
@@ -810,7 +902,7 @@ async function loadUsers(page = null, isSilent = false) {
                 if (isTargetCurrentSa) {
                     const crown = document.createElement('span');
                     crown.className = 'sa-crown-badge';
-                    crown.title = 'Currently Authorized Superadmin';
+                    crown.title = 'Primary Authorized Superadmin';
                     crown.textContent = '👑';
                     nameTd.appendChild(crown);
                 } else if (isTargetFormerSa) {
@@ -841,7 +933,7 @@ async function loadUsers(page = null, isSilent = false) {
                 if (isTargetCurrentSa) {
                     const saRoleBadge = document.createElement('span');
                     saRoleBadge.className = 'priv-role-badge role-current-superadmin';
-                    saRoleBadge.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg> SUPER ADMIN';
+                    saRoleBadge.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg> PRIMARY SUPER ADMIN';
                     roleTd.appendChild(saRoleBadge);
                 } else if (isTargetFormerSa) {
                     const regRoleBadge = document.createElement('span');
@@ -948,10 +1040,6 @@ function attachUserTableListeners() {
             openAccountStatusModal(uid, 'deactivate', fullname, role, status, isFormerSa);
         } else if (action === 'reactivate') {
             openAccountStatusModal(uid, 'reactivate', fullname, role, status, isFormerSa);
-        } else if (action === 'suspend') {
-            openAccountStatusModal(uid, 'suspend', fullname, role, status, isFormerSa);
-        } else if (action === 'restore') {
-            openAccountStatusModal(uid, 'restore', fullname, role, status, isFormerSa);
         } else if (action === 'audit_history') {
             openUserAuditModal(uid);
         } else if (action === 'approve') {
@@ -965,7 +1053,7 @@ function attachUserTableListeners() {
         } else if (action === 'req_delete') {
             await deleteUser(uid, true);
         } else if (action === 'edit') {
-            openEditModal(uid, btn.dataset.firstName, btn.dataset.lastName, btn.dataset.email, btn.dataset.phone);
+            openEditModal(uid, btn.dataset.firstName, btn.dataset.lastName, btn.dataset.email, btn.dataset.phone, btn.dataset.username, btn.dataset.role, btn.dataset.idno);
         } else if (action === 'privileges') {
             openManagePrivilegesModal(uid, btn.dataset.username, btn.dataset.role, btn.dataset.fullname, btn.dataset.idno);
         }
@@ -997,7 +1085,9 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-function openEditModal(id, firstName, lastName, email, phone) {
+let currentEditUserData = {};
+function openEditModal(id, firstName, lastName, email, phone, username = '', role = 'user', idno = '') {
+    currentEditUserData = { id, firstName, lastName, email, phone, username, role, idno };
     document.getElementById('editUserId').value = id;
     document.getElementById('editFirstName').value = firstName;
     document.getElementById('editLastName').value = lastName;
@@ -1005,9 +1095,35 @@ function openEditModal(id, firstName, lastName, email, phone) {
     document.getElementById('editPhone').value = phone || '';
     const newPwdEl = document.getElementById('editNewPassword');
     if (newPwdEl) newPwdEl.value = '';
+
+    // Manage Privileges button in edit modal: toggle visibility based on authorization
+    const editPrivBtn = document.getElementById('editUserPrivBtn');
+    if (editPrivBtn) {
+        const isTargetAdmin = (role || '').toLowerCase() === 'admin';
+        const isTargetCurrentSa = (role || '').toLowerCase() === 'super_admin';
+        const canManage = (userRole === 'super_admin') ? !isTargetCurrentSa : (userRole === 'admin' && userPrivileges.includes('edit_manage_accounts') && !isTargetAdmin && !isTargetCurrentSa);
+        editPrivBtn.style.display = canManage ? 'inline-flex' : 'none';
+    }
+
     const modal = document.getElementById('editUserModal');
     if (modal) modal.style.display = 'flex';
 }
+
+function openPrivFromEditModal() {
+    const id = document.getElementById('editUserId').value;
+    const fname = document.getElementById('editFirstName').value;
+    const lname = document.getElementById('editLastName').value;
+    const modal = document.getElementById('editUserModal');
+    if (modal) modal.style.display = 'none';
+    openManagePrivilegesModal(
+        id, 
+        currentEditUserData.username || '', 
+        currentEditUserData.role || 'user', 
+        `${fname} ${lname}`.trim() || currentEditUserData.username, 
+        currentEditUserData.idno || ''
+    );
+}
+window.openPrivFromEditModal = openPrivFromEditModal;
 
 function closeEditModal() {
     const modal = document.getElementById('editUserModal');
@@ -1590,6 +1706,9 @@ function openCreateAccountModal() {
     const modal = document.getElementById('createAccountModal');
     if (!modal) return;
 
+    // Reset to Step 1
+    goToCreateAccountStep(1);
+
     // Reset Form
     const form = document.getElementById('createAccountForm');
     if (form) form.reset();
@@ -1604,32 +1723,29 @@ function openCreateAccountModal() {
     const roleEl = document.getElementById('caRoleSelect');
     if (roleEl) roleEl.value = 'user';
 
-    // Reset Superadmin Handover Settings
-    const handoverGroup = document.getElementById('caSuperadminHandoverGroup');
-    if (handoverGroup) handoverGroup.style.display = 'none';
-    const deactCb = document.getElementById('caDeactivateOnLogout');
-    if (deactCb) deactCb.checked = false;
-    const submitText = document.getElementById('caSubmitText');
-    if (submitText) submitText.textContent = 'Create Account';
-
-    // Reset Password to default @Abcde12345
+    // Auto-generate 8-character random password (1 uppercase, 1 special char, 1 number, 5 lowercase)
+    const initialPwd = generateRandomPassword();
     const pwdEl = document.getElementById('caPassword');
     if (pwdEl) {
-        pwdEl.value = '@Abcde12345';
-        pwdEl.type = 'password';
+        pwdEl.value = initialPwd;
+        pwdEl.type = 'password'; // Masked by default
+    }
+    const eyeIcon = document.getElementById('caPwEyeIcon');
+    if (eyeIcon) {
+        eyeIcon.innerHTML = `
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+        `;
     }
 
-    // Reset eye icon
-    const eyeIcon = document.getElementById('caEyeIcon');
-    if (eyeIcon) {
-        eyeIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />`;
-    }
+    // Initialize role view, handover controls, and module privilege selection
+    validateRoleField();
 
     // Clear all errors
     clearAllFieldErrors();
 
-    // Update password strength for default password (@Abcde12345)
-    updatePasswordStrength('@Abcde12345');
+    // Update password strength for auto-generated password
+    updatePasswordStrength(initialPwd);
 
     // Show modal
     modal.classList.add('active');
@@ -1650,6 +1766,99 @@ function openCreateAccountModal() {
         }
     };
     document.addEventListener('keydown', caModalKeyHandler);
+}
+
+// Wizard navigation between Step 1 (Credentials) and Step 2 (Privileges)
+async function goToCreateAccountStep(step) {
+    const step1Page = document.getElementById('caStep1Page');
+    const step2Page = document.getElementById('caStep2Page');
+    const badge1 = document.getElementById('caStepBadge1');
+    const badge2 = document.getElementById('caStepBadge2');
+    const modalSubtitle = document.querySelector('.ca-modal-subtitle');
+    const modalBody = document.querySelector('.ca-modal-body');
+
+    if (step === 2) {
+        // Validate Step 1 fields before proceeding to privilege configuration
+        let isValid = true;
+        if (!validateRoleField()) isValid = false;
+        const usernameValid = await validateUsernameField();
+        if (!usernameValid) isValid = false;
+        const emailValid = await validateEmailField();
+        if (!emailValid) isValid = false;
+        if (!validatePasswordField()) isValid = false;
+
+        if (!isValid) return false;
+
+        // Populate Step 2 user summary banner
+        const uEl = document.getElementById('caUsername');
+        const eEl = document.getElementById('caEmail');
+        const rEl = document.getElementById('caRoleSelect');
+        const role = rEl ? rEl.value : 'user';
+        const username = uEl ? uEl.value.trim() : '';
+        const email = eEl ? eEl.value.trim() : '';
+
+        const uDisplay = document.getElementById('caStep2UsernameDisplay');
+        if (uDisplay) uDisplay.textContent = username ? `@${username}` : 'New Account';
+
+        const eDisplay = document.getElementById('caStep2EmailDisplay');
+        if (eDisplay) eDisplay.textContent = email || '—';
+
+        const rBadge = document.getElementById('caStep2RoleBadge');
+        if (rBadge) {
+            rBadge.textContent = role.toUpperCase().replace('_', ' ');
+            rBadge.className = 'badge ' + (role === 'super_admin' ? 'badge-super-admin' : (role === 'admin' ? 'badge-admin' : 'badge-user'));
+        }
+
+        const avatar = document.getElementById('caStep2Avatar');
+        if (avatar) {
+            avatar.textContent = username ? username.charAt(0).toUpperCase() : '👤';
+        }
+
+        // Show Step 2, hide Step 1
+        if (step1Page) step1Page.style.display = 'none';
+        if (step2Page) step2Page.style.display = 'block';
+
+        // Update step indicator badges
+        if (badge1) {
+            badge1.classList.remove('active');
+            badge1.classList.add('completed');
+            const num1 = document.getElementById('caStepNum1');
+            if (num1) num1.innerHTML = '✓';
+        }
+        if (badge2) {
+            badge2.classList.add('active');
+            badge2.classList.remove('completed');
+        }
+
+        if (modalSubtitle) {
+            modalSubtitle.textContent = 'Step 2 of 2: Configure module privileges and feature access.';
+        }
+
+        if (modalBody) modalBody.scrollTop = 0;
+        return true;
+    } else {
+        // Return to Step 1
+        if (step2Page) step2Page.style.display = 'none';
+        if (step1Page) step1Page.style.display = 'block';
+
+        if (badge1) {
+            badge1.classList.add('active');
+            badge1.classList.remove('completed');
+            const num1 = document.getElementById('caStepNum1');
+            if (num1) num1.innerHTML = '1';
+        }
+        if (badge2) {
+            badge2.classList.remove('active');
+            badge2.classList.remove('completed');
+        }
+
+        if (modalSubtitle) {
+            modalSubtitle.textContent = 'Step 1 of 2: Complete the account credentials and profile details.';
+        }
+
+        if (modalBody) modalBody.scrollTop = 0;
+        return true;
+    }
 }
 
 // Backward-compatible alias
@@ -1696,12 +1905,71 @@ function trapModalFocus(e, modal) {
     }
 }
 
-function resetDefaultPassword() {
+// Generates an 8-character random password:
+// 1 uppercase, 1 special character, 1 number, 5 lowercase
+function generateRandomPassword() {
+    const uppers = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const lowers = 'abcdefghjkmnpqrstuvwxyz';
+    const digits = '23456789';
+    const specials = '!@#$%&*?';
+
+    const chars = [
+        uppers[Math.floor(Math.random() * uppers.length)],
+        specials[Math.floor(Math.random() * specials.length)],
+        digits[Math.floor(Math.random() * digits.length)]
+    ];
+
+    for (let i = 0; i < 5; i++) {
+        chars.push(lowers[Math.floor(Math.random() * lowers.length)]);
+    }
+
+    // Fisher-Yates shuffle
+    for (let i = chars.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [chars[i], chars[j]] = [chars[j], chars[i]];
+    }
+
+    return chars.join('');
+}
+
+function generateAndSetNewPassword() {
     const pwdEl = document.getElementById('caPassword');
     if (pwdEl) {
-        pwdEl.value = '@Abcde12345';
-        updatePasswordStrength(pwdEl.value);
+        const newPwd = generateRandomPassword();
+        pwdEl.value = newPwd;
+        updatePasswordStrength(newPwd);
         clearFieldError('caPassword');
+        showToast('Generated new random password!', 'success');
+    }
+}
+
+function resetDefaultPassword() {
+    generateAndSetNewPassword();
+}
+
+function copyPasswordToClipboard(btn) {
+    const pwdEl = document.getElementById('caPassword');
+    if (!pwdEl || !pwdEl.value) return;
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(pwdEl.value).then(() => {
+            showToast('Password copied to clipboard!', 'success');
+        }).catch(() => {
+            fallbackCopyPassword(pwdEl);
+        });
+    } else {
+        fallbackCopyPassword(pwdEl);
+    }
+}
+
+function fallbackCopyPassword(input) {
+    input.select();
+    input.setSelectionRange(0, 99999);
+    try {
+        document.execCommand('copy');
+        showToast('Password copied to clipboard!', 'success');
+    } catch (e) {
+        showToast('Unable to copy password', 'error');
     }
 }
 
@@ -1770,7 +2038,7 @@ function updatePasswordStrength(pwd) {
         seg3.classList.add('active-strong');
         seg4.classList.add('active-strong');
         badge.textContent = 'Strong';
-        badge.style.color = 'var(--ca-green, #10b981)';
+        badge.style.color = 'var(--ca-green, #047857)';
     }
 }
 
@@ -1810,20 +2078,113 @@ function validateRoleField() {
     }
     clearFieldError('caRoleSelect', 'caRoleError');
 
+    const role = roleEl.value;
     const handoverGroup = document.getElementById('caSuperadminHandoverGroup');
     const deactCb = document.getElementById('caDeactivateOnLogout');
     const submitText = document.getElementById('caSubmitText');
+    const privNotice = document.getElementById('caPrivNotice');
+    const privGroupAdmin = document.getElementById('caPrivGroupAdmin');
+    const privGroupAudit = document.getElementById('caPrivGroupAudit');
 
-    if (roleEl.value === 'super_admin') {
+    if (role === 'super_admin') {
         if (handoverGroup) handoverGroup.style.display = 'block';
         if (submitText) submitText.textContent = 'Create Superadmin';
+        if (privNotice) {
+            privNotice.style.display = 'block';
+            privNotice.innerHTML = '👑 <strong>Super Admin Role:</strong> Holds root authority across all modules.';
+        }
+        if (privGroupAdmin) privGroupAdmin.style.display = 'block';
+        if (privGroupAudit) privGroupAudit.style.display = 'block';
+        setCaPrivPreset('all');
+    } else if (role === 'admin') {
+        if (handoverGroup) handoverGroup.style.display = 'none';
+        if (deactCb) deactCb.checked = false;
+        if (submitText) submitText.textContent = 'Create Account';
+        if (privNotice) {
+            privNotice.style.display = 'block';
+            privNotice.innerHTML = '🛡️ <strong>Administrator Role:</strong> Assign authorized administrative and operational module privileges.';
+        }
+        if (privGroupAdmin) privGroupAdmin.style.display = 'block';
+        if (privGroupAudit) privGroupAudit.style.display = 'block';
+        setCaPrivPreset('recommended');
     } else {
         if (handoverGroup) handoverGroup.style.display = 'none';
         if (deactCb) deactCb.checked = false;
         if (submitText) submitText.textContent = 'Create Account';
+        if (privNotice) {
+            privNotice.style.display = 'block';
+            privNotice.innerHTML = '👤 <strong>Standard User Role:</strong> Configured for Personal &amp; Account features. Administrative privileges are disabled.';
+        }
+        if (privGroupAdmin) privGroupAdmin.style.display = 'none';
+        if (privGroupAudit) privGroupAudit.style.display = 'none';
+        setCaPrivPreset('user_defaults');
     }
 
     return true;
+}
+
+function setCaPrivPreset(preset) {
+    const roleEl = document.getElementById('caRoleSelect');
+    const role = roleEl ? roleEl.value : 'user';
+    const cbs = document.querySelectorAll('.ca-privilege-cb');
+
+    if (preset === 'clear') {
+        cbs.forEach(cb => { cb.checked = false; });
+        return;
+    }
+
+    if (preset === 'all') {
+        cbs.forEach(cb => { cb.checked = true; });
+        return;
+    }
+
+    // Recommended or default
+    if (role === 'user' || preset === 'user_defaults') {
+        cbs.forEach(cb => {
+            cb.checked = (cb.value === 'profile_management' || cb.value === 'change_password');
+        });
+    } else {
+        const adminDefaults = [
+            'profile_management',
+            'change_password',
+            'view_accounts',
+            'create_accounts',
+            'edit_manage_accounts',
+            'block_unblock_users',
+            'registration_approval',
+            'account_deletion_requests',
+            'view_activity_logs'
+        ];
+        cbs.forEach(cb => {
+            cb.checked = adminDefaults.includes(cb.value);
+        });
+    }
+}
+
+function toggleCaPasswordVisibility() {
+    const pEl = document.getElementById('caPassword');
+    const icon = document.getElementById('caPwEyeIcon');
+    if (!pEl) return;
+
+    if (pEl.type === 'password') {
+        pEl.type = 'text';
+        if (icon) {
+            icon.innerHTML = `
+                <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"></path>
+                <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"></path>
+                <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"></path>
+                <line x1="2" y1="2" x2="22" y2="22"></line>
+            `;
+        }
+    } else {
+        pEl.type = 'password';
+        if (icon) {
+            icon.innerHTML = `
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+            `;
+        }
+    }
 }
 
 async function validateUsernameField() {
@@ -1954,7 +2315,7 @@ function openCreateSuperadminConfirmModal() {
                 <div style="display:flex; align-items:flex-start; gap:0.65rem;">
                     <span style="font-size:1.25rem; line-height:1;">ℹ️</span>
                     <div>
-                        <strong style="color:var(--primary, #4f46e5); font-size:0.88rem; display:block; margin-bottom:0.25rem;">
+                        <strong class="create-sa-notice-title" style="color:var(--primary, #4f46e5); font-size:0.88rem; display:block; margin-bottom:0.25rem;">
                             &lsquo;Deactivate My Account After Logout&rsquo; IS DISABLED
                         </strong>
                         <span style="font-size:0.84rem; line-height:1.5; color:var(--text-primary); display:block;">
@@ -1982,6 +2343,13 @@ async function proceedCreateSuperadminWithPassword() {
 async function submitCreateAccountForm(e) {
     if (e && typeof e.preventDefault === 'function') {
         e.preventDefault();
+    }
+
+    // If currently on Step 1, advance to Step 2 instead of executing final creation
+    const step1Page = document.getElementById('caStep1Page');
+    if (step1Page && step1Page.style.display !== 'none') {
+        await goToCreateAccountStep(2);
+        return;
     }
 
     // Run validations
@@ -2041,6 +2409,8 @@ async function executeAccountCreation(isHandoverConfirmed = false) {
     if (btnText) btnText.textContent = (role === 'super_admin') ? 'Creating Superadmin...' : 'Creating Account...';
 
     try {
+        const selectedPrivs = Array.from(document.querySelectorAll('.ca-privilege-cb:checked')).map(cb => cb.value);
+
         const payload = {
             account_role: role,
             id_number: idNumber,
@@ -2048,6 +2418,7 @@ async function executeAccountCreation(isHandoverConfirmed = false) {
             email: email,
             password: password,
             confirm_password: password,
+            privileges: JSON.stringify(selectedPrivs),
             deactivate_on_logout: isDeact ? '1' : '0',
             handover_confirmed: isHandoverConfirmed ? '1' : '0',
             action_confirm_password: pwd
@@ -2057,14 +2428,24 @@ async function executeAccountCreation(isHandoverConfirmed = false) {
 
         if (res.success) {
             closeCreateAccountModal();
+            const emailSent = res.data && res.data.email_sent;
+            const emailError = res.data && res.data.email_error;
+            const emailNote = emailSent ? ` Login credentials sent to ${email}.` : (emailError ? ` (Email issue: ${emailError})` : '');
+
             if (role === 'super_admin') {
                 if (isDeact) {
-                    showToast(`Superadmin @${username} created. Your account will become Inactive upon logout.`, 'warning');
+                    showToast(`Superadmin @${username} created.${emailNote} Your account will become Inactive upon logout.`, 'warning');
                 } else {
-                    showToast(`Superadmin @${username} created. Your account remains Active after logout.`, 'success');
+                    showToast(`Superadmin @${username} created.${emailNote} Your account remains Active after logout.`, 'success');
                 }
             } else {
-                showToast(`Account created for @${username} (${idNumber})`, 'success');
+                if (emailSent) {
+                    showToast(`Account created for @${username}! Login credentials sent to ${email}`, 'success');
+                } else if (emailError) {
+                    showToast(`Account created for @${username}, but email failed: ${emailError}`, 'warning');
+                } else {
+                    showToast(`Account created for @${username} (${idNumber})`, 'success');
+                }
             }
             lastUsersPayloadHash = '';
             loadUsers(usersPage, false);
@@ -2102,15 +2483,33 @@ function showToast(message, type = 'success') {
     if (type === 'success') {
         toast.style.background = 'var(--bg-surface, #ffffff)';
         toast.style.color = 'var(--success, #10b981)';
-        toast.style.border = '1px solid var(--success-border, #a7f3d0)';
+        toast.style.border = '1px solid var(--success-border, rgba(16, 185, 129, 0.35))';
+        toast.style.boxShadow = '0 8px 24px rgba(0,0,0,0.25), 0 0 16px rgba(16, 185, 129, 0.2)';
+    } else if (type === 'warning') {
+        toast.style.background = 'var(--bg-surface, #ffffff)';
+        toast.style.color = 'var(--warning, #f59e0b)';
+        toast.style.border = '1px solid var(--warning-border, rgba(245, 158, 11, 0.35))';
+        toast.style.boxShadow = '0 8px 24px rgba(0,0,0,0.25), 0 0 16px rgba(245, 158, 11, 0.2)';
+    } else if (type === 'info') {
+        toast.style.background = 'var(--bg-surface, #ffffff)';
+        toast.style.color = 'var(--primary, #3b82f6)';
+        toast.style.border = '1px solid var(--primary-border, rgba(59, 130, 246, 0.35))';
+        toast.style.boxShadow = '0 8px 24px rgba(0,0,0,0.25), 0 0 16px rgba(59, 130, 246, 0.2)';
     } else {
         toast.style.background = 'var(--bg-surface, #ffffff)';
         toast.style.color = 'var(--danger, #ef4444)';
-        toast.style.border = '1px solid var(--danger-border, #fecaca)';
+        toast.style.border = '1px solid var(--danger-border, rgba(239, 68, 68, 0.35))';
+        toast.style.boxShadow = '0 8px 24px rgba(0,0,0,0.25), 0 0 16px rgba(239, 68, 68, 0.2)';
     }
 
-    const icon = type === 'success' ? '✓' : '⚠';
-    toast.innerHTML = `<span style="font-size:1.1rem; font-weight:bold;">${icon}</span> <span>${escapeHtml(message)}</span>`;
+    const icons = {
+        success: '✓',
+        error: '✕',
+        warning: '⚠',
+        info: 'ℹ'
+    };
+    const icon = icons[type] || 'ℹ';
+    toast.innerHTML = `<span style="font-size:1.05rem; font-weight:bold; display:flex; align-items:center;">${icon}</span> <span>${escapeHtml(message)}</span>`;
 
     container.appendChild(toast);
 
@@ -2120,6 +2519,7 @@ function showToast(message, type = 'success') {
         setTimeout(() => toast.remove(), 350);
     }, 4000);
 }
+window.showToast = showToast;
 
 // ----------------------------------------------------
 // Privilege Management: Modal Controls (Table Action)
@@ -2292,7 +2692,7 @@ async function saveModalPrivileges() {
     document.querySelectorAll('.modal-priv-cb:checked').forEach(cb => selected.push(cb.value));
 
     let pwd = '';
-    if (userRole === 'super_admin') {
+    if (userRole === 'super_admin' || userRole === 'admin') {
         try { 
             pwd = await promptSaPassword(); 
         } catch (e) { 
@@ -2391,7 +2791,9 @@ async function openSuperadminSuccessionModal(preselectedId = null) {
 
     if (alertBox) { alertBox.style.display = 'none'; alertBox.textContent = ''; }
     if (form) form.reset();
-    if (submitBtn) submitBtn.disabled = false;
+    const checkbox = document.getElementById('succConfirmCheckbox');
+    if (checkbox) checkbox.checked = false;
+    if (submitBtn) submitBtn.disabled = true;
     if (btnText) btnText.textContent = 'Execute Succession & Step Down';
 
     select.innerHTML = '<option value="">Loading eligible administrators...</option>';
@@ -2474,6 +2876,14 @@ function onSuccessorSelected() {
     }
 }
 
+function onSuccConfirmCheckboxChange() {
+    const checkbox = document.getElementById('succConfirmCheckbox');
+    const submitBtn = document.getElementById('succSubmitBtn');
+    if (checkbox && submitBtn) {
+        submitBtn.disabled = !checkbox.checked;
+    }
+}
+
 async function submitSuperadminSuccession(event) {
     if (event) event.preventDefault();
     const select = document.getElementById('succSuccessorSelect');
@@ -2484,6 +2894,14 @@ async function submitSuperadminSuccession(event) {
     const alertBox = document.getElementById('succModalAlert');
     const submitBtn = document.getElementById('succSubmitBtn');
     const btnText = document.getElementById('succSubmitBtnText');
+
+    if (!checkbox || !checkbox.checked) {
+        if (submitBtn) submitBtn.disabled = true;
+        alertBox.className = 'modal-alert-banner alert-error';
+        alertBox.textContent = 'You must explicitly acknowledge the transfer by checking the confirmation box.';
+        alertBox.style.display = 'block';
+        return;
+    }
 
     if (!select.value) {
         alertBox.className = 'modal-alert-banner alert-error';
@@ -2502,13 +2920,6 @@ async function submitSuperadminSuccession(event) {
     if (!passwordInput.value) {
         alertBox.className = 'modal-alert-banner alert-error';
         alertBox.textContent = 'Please confirm your current Superadmin password to authorize the succession.';
-        alertBox.style.display = 'block';
-        return;
-    }
-
-    if (!checkbox.checked) {
-        alertBox.className = 'modal-alert-banner alert-error';
-        alertBox.textContent = 'You must explicitly acknowledge the transfer by checking the confirmation box.';
         alertBox.style.display = 'block';
         return;
     }
@@ -2546,14 +2957,14 @@ async function submitSuperadminSuccession(event) {
             alertBox.className = 'modal-alert-banner alert-error';
             alertBox.textContent = '✗ ' + (res.message || 'Transfer failed. Check credentials and successor eligibility.');
             alertBox.style.display = 'block';
-            if (submitBtn) submitBtn.disabled = false;
+            if (submitBtn) submitBtn.disabled = !checkbox.checked;
             if (btnText) btnText.textContent = 'Execute Succession & Step Down';
         }
     } catch (err) {
         alertBox.className = 'modal-alert-banner alert-error';
         alertBox.textContent = '✗ Server or network error executing succession.';
         alertBox.style.display = 'block';
-        if (submitBtn) submitBtn.disabled = false;
+        if (submitBtn) submitBtn.disabled = !checkbox.checked;
         if (btnText) btnText.textContent = 'Execute Succession & Step Down';
     }
 }
@@ -2569,28 +2980,33 @@ async function openUserDetailsModal(userId) {
 
     try {
         const res = await apiCall('get_user_details', { user_id: userId, target_id: userId });
-        if (res.success && res.data) {
-            const u = res.data.user;
+        if (res && res.success && res.data) {
+            const u = res.data.user || {};
             const succHistory = res.data.succession_history || [];
-            const fullName = ((u.first_name || '') + ' ' + (u.last_name || '')).trim() || u.username;
+            const fullName = ((u.first_name || '') + ' ' + (u.last_name || '')).trim() || u.username || 'Unknown User';
             const rClean = (u.role || 'user').toLowerCase();
 
+            const isCurrentSa = Boolean(u.is_current_superadmin ?? res.data.is_current_superadmin);
+            const isFormerSa = Boolean(u.is_former_superadmin == 1 || res.data.is_former_superadmin);
+            const isActiveSession = Boolean(u.is_active_session ?? res.data.is_active_session);
+            const isEligibleSuccessor = Boolean(u.is_eligible_successor ?? res.data.is_eligible_successor);
+            const displayStatus = u.display_status || res.data.display_status || (u.status ? u.status.charAt(0).toUpperCase() + u.status.slice(1) : 'Pending');
+
             let roleBadgeHtml = `<span class="priv-role-badge ${rClean}">${rClean.toUpperCase()}</span>`;
-            if (u.is_current_superadmin) {
+            if (isCurrentSa) {
                 roleBadgeHtml = `<span class="priv-role-badge role-current-superadmin"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg> CURRENT SUPERADMIN</span>`;
-            } else if (u.is_former_superadmin) {
+            } else if (isFormerSa) {
                 roleBadgeHtml += ` <span class="priv-role-badge role-former-superadmin">FORMER SUPERADMIN</span>`;
             }
 
             let statusBadgeHtml = '';
-            if (u.display_status === 'Active') {
+            const dsLower = (displayStatus || '').toLowerCase();
+            if (dsLower === 'active') {
                 statusBadgeHtml = '<span class="user-status-badge status-active">Active</span>';
-            } else if (u.display_status === 'Inactive') {
+            } else if (dsLower === 'inactive' || dsLower === 'suspended' || dsLower === 'blocked') {
                 statusBadgeHtml = '<span class="user-status-badge status-inactive">Inactive</span>';
-            } else if (u.display_status === 'Suspended') {
-                statusBadgeHtml = '<span class="user-status-badge status-suspended">Suspended</span>';
             } else {
-                statusBadgeHtml = `<span class="user-status-badge status-pending">${escapeHtml(u.display_status || 'Pending')}</span>`;
+                statusBadgeHtml = `<span class="user-status-badge status-pending">${escapeHtml(displayStatus || 'Pending')}</span>`;
             }
 
             let succSectionHtml = '';
@@ -2599,10 +3015,12 @@ async function openUserDetailsModal(userId) {
                     <div class="dossier-section">
                         <div class="dossier-section-title">👑 Superadmin Succession Records</div>
                         <div class="dossier-succ-list">
-                            ${succHistory.map(s => `
+                            ${succHistory.map(s => {
+                                const isOutgoing = (s.outgoing_superadmin_id == u.id || s.outgoing_user_id == u.id);
+                                return `
                                 <div class="dossier-succ-item">
                                     <div class="dossier-succ-header">
-                                        <span class="dossier-succ-type">${s.outgoing_user_id == u.id ? 'Stepped Down As Superadmin' : 'Appointed As Superadmin'}</span>
+                                        <span class="dossier-succ-type">${isOutgoing ? 'Stepped Down As Superadmin' : 'Appointed As Superadmin'}</span>
                                         <span class="dossier-succ-date">${escapeHtml(s.transfer_date || s.created_at)}</span>
                                     </div>
                                     <div class="dossier-succ-body">
@@ -2610,11 +3028,39 @@ async function openUserDetailsModal(userId) {
                                         <div style="margin-top:0.3rem;"><strong>Reason:</strong> ${escapeHtml(s.reason || 'No statement recorded')}</div>
                                     </div>
                                 </div>
-                            `).join('')}
+                            `;
+                            }).join('')}
                         </div>
                     </div>
                 `;
             }
+
+            const privList = res.data.privileges_list || [];
+            const isTargetAdmin = rClean === 'admin';
+            const isSuperAdminUser = (typeof userRole !== 'undefined' && userRole === 'super_admin');
+            const isAdminUser = (typeof userRole !== 'undefined' && userRole === 'admin');
+            const currentPrivs = (typeof userPrivileges !== 'undefined' && Array.isArray(userPrivileges)) ? userPrivileges : [];
+            const canManageTargetPriv = isSuperAdminUser ? !isCurrentSa : (isAdminUser && currentPrivs.includes('edit_manage_accounts') && !isTargetAdmin && !isCurrentSa);
+
+            let privSectionHtml = `
+                <div class="dossier-section" style="margin-top:1.2rem; padding:1rem; border:1px solid var(--border-color); border-radius:12px; background:var(--bg-surface-subtle);">
+                    <div class="dossier-section-title" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.6rem;">
+                        <span style="font-weight:700; color:var(--text-primary);">🛡️ Assigned Module Privileges</span>
+                        ${canManageTargetPriv ? `
+                            <button type="button" class="btn-small btn-secondary" onclick="closeUserDetailsModal(); openManagePrivilegesModal(${u.id}, '${escapeHtml(u.username)}', '${escapeHtml(u.role)}', '${escapeHtml(fullName)}', '${escapeHtml(u.id_number || '')}');" style="display:inline-flex; align-items:center; gap:0.35rem; padding:0.28rem 0.75rem; font-size:0.78rem;">
+                                <span>✏️</span> Edit Privileges
+                            </button>
+                        ` : ''}
+                    </div>
+                    <div style="display:flex; flex-wrap:wrap; gap:0.4rem;">
+                        ${privList.length > 0 ? privList.map(p => `
+                            <span class="user-status-badge status-active" style="font-size:0.75rem; text-transform:none; font-family:'Inter',sans-serif; padding:0.25rem 0.6rem;">
+                                ✓ ${escapeHtml(p.replace(/_/g, ' '))}
+                            </span>
+                        `).join('') : '<span style="color:var(--text-muted); font-size:0.83rem;">No individual module permissions granted (Restricted standard access)</span>'}
+                    </div>
+                </div>
+            `;
 
             content.innerHTML = `
                 <div class="dossier-user-header">
@@ -2625,7 +3071,7 @@ async function openUserDetailsModal(userId) {
                         <div class="dossier-badges" style="margin-top:0.4rem; display:flex; gap:0.4rem; flex-wrap:wrap; align-items:center;">
                             ${roleBadgeHtml}
                             ${statusBadgeHtml}
-                            ${u.is_active_session ? '<span class="dossier-session-badge live">● Active Session Live</span>' : '<span class="dossier-session-badge">No Active Session</span>'}
+                            ${isActiveSession ? '<span class="dossier-session-badge live">● Active Session Live</span>' : '<span class="dossier-session-badge">No Active Session</span>'}
                         </div>
                     </div>
                 </div>
@@ -2649,20 +3095,22 @@ async function openUserDetailsModal(userId) {
                     </div>
                     <div class="dossier-item">
                         <div class="dossier-label">Account Status</div>
-                        <div class="dossier-value">${escapeHtml(u.display_status || u.status)}</div>
+                        <div class="dossier-value">${escapeHtml(displayStatus)}</div>
                     </div>
                     <div class="dossier-item">
                         <div class="dossier-label">Successor Eligibility</div>
-                        <div class="dossier-value">${u.is_eligible_successor ? '<span style="color:var(--success); font-weight:600;">✓ Eligible Active Admin</span>' : '<span style="color:var(--text-muted);">Not Eligible (Requires Active Admin role)</span>'}</div>
+                        <div class="dossier-value">${isEligibleSuccessor ? '<span style="color:var(--success); font-weight:600;">✓ Eligible Active Admin</span>' : '<span style="color:var(--text-muted);">Not Eligible (Requires Active Admin role)</span>'}</div>
                     </div>
                 </div>
 
+                ${privSectionHtml}
                 ${succSectionHtml}
             `;
         } else {
-            content.innerHTML = `<div class="modal-alert-banner alert-error">${escapeHtml(res.message || 'Failed to load user details.')}</div>`;
+            content.innerHTML = `<div class="modal-alert-banner alert-error">${escapeHtml((res && res.message) ? res.message : 'Failed to load user details.')}</div>`;
         }
     } catch (err) {
+        console.error('Error retrieving user dossier:', err);
         content.innerHTML = '<div class="modal-alert-banner alert-error">Network error retrieving user dossier.</div>';
     }
 }
@@ -2699,47 +3147,52 @@ function openAccountStatusModal(userId, actionType, userName, userRole, currentS
     submitBtn.disabled = false;
     submitBtn.className = 'btn-modal-submit';
 
+    const isTargetSa = (userRole || '').toLowerCase() === 'super_admin';
+    const pwLabel = document.getElementById('statusModalPasswordLabel');
+    const pwInput = document.getElementById('statusModalPasswordInput');
+
     if (actionType === 'deactivate') {
-        titleEl.textContent = 'Deactivate User Account';
-        subtitleEl.textContent = 'Revoke account login access';
-        reasonLabel.textContent = 'REASON FOR ACCOUNT DEACTIVATION';
+        titleEl.textContent = isTargetSa ? 'Deactivate Superadmin Account' : 'Deactivate User Account';
+        subtitleEl.textContent = isTargetSa ? 'Revoke Superadmin account login access' : 'Revoke account login access';
+        reasonLabel.textContent = isTargetSa ? 'REASON FOR SUPERADMIN DEACTIVATION' : 'REASON FOR ACCOUNT DEACTIVATION';
         submitBtnText.textContent = 'Confirm Deactivation';
         submitBtn.classList.add('btn-danger');
-        noticeBox.className = 'status-notice-box notice-warning';
-        noticeBox.innerHTML = '⚠️ <strong>Deactivation Notice:</strong> This account will be marked Inactive and blocked from logging in. Any active sessions for this account will be invalidated immediately.';
+
+        if (isTargetSa) {
+            noticeBox.className = 'status-notice-box notice-critical';
+            noticeBox.innerHTML = '🛡️ <strong>SUPERADMIN SECURITY VERIFICATION:</strong> You are deactivating another Superadmin account. You must enter your current active Superadmin password to authorize this action. The target Superadmin will be immediately marked Inactive and prevented from logging in.';
+            if (pwLabel) pwLabel.textContent = 'CONFIRM YOUR SUPERADMIN PASSWORD';
+            if (pwInput) pwInput.placeholder = 'Enter your active Superadmin password to authorize';
+        } else {
+            noticeBox.className = 'status-notice-box notice-warning';
+            noticeBox.innerHTML = '⚠️ <strong>Deactivation Notice:</strong> This account will be marked Inactive and blocked from logging in. Any active sessions for this account will be invalidated immediately.';
+            if (pwLabel) pwLabel.textContent = 'ADMINISTRATOR PASSWORD CONFIRMATION';
+            if (pwInput) pwInput.placeholder = 'Confirm your password to authorize';
+        }
         noticeBox.style.display = 'block';
     } else if (actionType === 'reactivate') {
-        titleEl.textContent = 'Reactivate Account';
-        subtitleEl.textContent = 'Restore login privileges to this account';
-        reasonLabel.textContent = 'REASON FOR ACCOUNT REACTIVATION';
+        titleEl.textContent = isTargetSa ? 'Reactivate Superadmin Account' : 'Reactivate Account';
+        subtitleEl.textContent = isTargetSa ? 'Restore login privileges to this Superadmin account' : 'Restore login privileges to this account';
+        reasonLabel.textContent = isTargetSa ? 'REASON FOR SUPERADMIN REACTIVATION' : 'REASON FOR ACCOUNT REACTIVATION';
         submitBtnText.textContent = 'Confirm Reactivation';
         submitBtn.classList.add('btn-success');
         
-        if (isFormerSuperadmin) {
+        if (isTargetSa) {
+            noticeBox.className = 'status-notice-box notice-critical';
+            noticeBox.innerHTML = '🛡️ <strong>SUPERADMIN SECURITY VERIFICATION:</strong> You are reactivating a Superadmin account. You must enter your current active Superadmin password to authorize this action.';
+            if (pwLabel) pwLabel.textContent = 'CONFIRM YOUR SUPERADMIN PASSWORD';
+            if (pwInput) pwInput.placeholder = 'Enter your active Superadmin password to authorize';
+        } else if (isFormerSuperadmin) {
             noticeBox.className = 'status-notice-box notice-critical';
             noticeBox.innerHTML = '🛡️ <strong>CRITICAL RULE APPLIED:</strong> This account belongs to a Former Superadmin. Reactivating will restore Active status with their non-Superadmin role (Admin/Staff). <strong>It will NOT restore Superadmin authority</strong>. Only a separate, explicit Superadmin Transfer workflow can reassign master rights.';
+            if (pwLabel) pwLabel.textContent = 'ADMINISTRATOR PASSWORD CONFIRMATION';
+            if (pwInput) pwInput.placeholder = 'Confirm your password to authorize';
         } else {
             noticeBox.className = 'status-notice-box notice-info';
             noticeBox.innerHTML = 'ℹ️ <strong>Reactivation Notice:</strong> The account will be restored to Active status and granted permission to authenticate and access assigned features.';
+            if (pwLabel) pwLabel.textContent = 'ADMINISTRATOR PASSWORD CONFIRMATION';
+            if (pwInput) pwInput.placeholder = 'Confirm your password to authorize';
         }
-        noticeBox.style.display = 'block';
-    } else if (actionType === 'suspend') {
-        titleEl.textContent = 'Suspend User Account';
-        subtitleEl.textContent = 'Place account under administrative suspension';
-        reasonLabel.textContent = 'REASON FOR ACCOUNT SUSPENSION';
-        submitBtnText.textContent = 'Confirm Suspension';
-        submitBtn.classList.add('btn-danger');
-        noticeBox.className = 'status-notice-box notice-danger';
-        noticeBox.innerHTML = '🚫 <strong>Suspension Notice:</strong> The account will be immediately suspended due to security or policy issues. Active sessions will be terminated.';
-        noticeBox.style.display = 'block';
-    } else if (actionType === 'restore') {
-        titleEl.textContent = 'Restore Suspended Account';
-        subtitleEl.textContent = 'Lift administrative suspension';
-        reasonLabel.textContent = 'REASON FOR RESTORING ACCOUNT';
-        submitBtnText.textContent = 'Confirm Restoration';
-        submitBtn.classList.add('btn-success');
-        noticeBox.className = 'status-notice-box notice-info';
-        noticeBox.innerHTML = '🔓 <strong>Restoration Notice:</strong> The suspension will be lifted and the account restored to Active status.';
         noticeBox.style.display = 'block';
     }
 
@@ -2884,6 +3337,35 @@ function closeUserAuditModal() {
     if (modal) modal.style.display = 'none';
 }
 
+// ── Logout Confirmation Warning Dialog ──────────────────────────────────────
+function openLogoutConfirmModal() {
+    const modal = document.getElementById('logoutConfirmModal');
+    if (modal) {
+        modal.style.display = 'flex';
+    }
+}
+
+function closeLogoutConfirmModal() {
+    const modal = document.getElementById('logoutConfirmModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+function confirmLogout() {
+    window.location.href = '../php/logout.php';
+}
+
+// Global key handler for modal dismissal
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        const logoutModal = document.getElementById('logoutConfirmModal');
+        if (logoutModal && logoutModal.style.display === 'flex') {
+            closeLogoutConfirmModal();
+        }
+    }
+});
+
 // Expose functions globally for inline HTML events
 window.resetUserFilters = resetUserFilters;
 window.openSuperadminSuccessionModal = openSuperadminSuccessionModal;
@@ -2904,3 +3386,10 @@ window.manualRefreshUsers = manualRefreshUsers;
 window.openCreateSuperadminConfirmModal = openCreateSuperadminConfirmModal;
 window.closeCreateSuperadminConfirmModal = closeCreateSuperadminConfirmModal;
 window.proceedCreateSuperadminWithPassword = proceedCreateSuperadminWithPassword;
+window.openLogoutConfirmModal = openLogoutConfirmModal;
+window.closeLogoutConfirmModal = closeLogoutConfirmModal;
+window.confirmLogout = confirmLogout;
+window.toggleCaPasswordVisibility = toggleCaPasswordVisibility;
+window.setCaPrivPreset = setCaPrivPreset;
+window.goToCreateAccountStep = goToCreateAccountStep;
+window.onSuccConfirmCheckboxChange = onSuccConfirmCheckboxChange;

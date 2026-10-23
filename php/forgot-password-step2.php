@@ -86,11 +86,27 @@ try {
     sendJsonResponse(false, 'No security questions configured for this account (table missing).');
 }
 
+// Helper to decode entities and map question keys to human-readable text
+function formatSecurityQuestion(string $q): string {
+    $map = [
+        'best_friend_elementary' => "Who is your best friend in Elementary?",
+        'favorite_pet'           => "What is the name of your favorite pet?",
+        'favorite_teacher'       => "Who is your favorite teacher in high school?",
+        'mother_maiden_name'     => "What is your mother's maiden name?",
+        'birth_city'             => "In what city were you born?",
+        'first_car'              => "What was the make and model of your first car?"
+    ];
+    if (isset($map[$q])) {
+        return $map[$q];
+    }
+    return htmlspecialchars_decode($q, ENT_QUOTES | ENT_HTML5);
+}
+
 sendJsonResponse(true, 'OTP verified successfully', [
     'idNumber'  => $user['id_number'],
     'questions' => [
-        'q1' => $questions['question1'],
-        'q2' => $questions['question2'],
-        'q3' => $questions['question3']
+        'q1' => formatSecurityQuestion((string)$questions['question1']),
+        'q2' => formatSecurityQuestion((string)$questions['question2']),
+        'q3' => formatSecurityQuestion((string)$questions['question3'])
     ]
 ]);

@@ -189,11 +189,11 @@ if ($newPassword !== $confirmPassword) {
 }
 
 // ── Step 3: Security Questions ─────────────────────────────────────────────────
-$q1 = trim(sanitizeInput($input['q1'] ?? ''));
+$q1 = trim(htmlspecialchars_decode(strip_tags((string)($input['q1'] ?? '')), ENT_QUOTES));
 $a1 = trim((string)($input['a1'] ?? ''));
-$q2 = trim(sanitizeInput($input['q2'] ?? ''));
+$q2 = trim(htmlspecialchars_decode(strip_tags((string)($input['q2'] ?? '')), ENT_QUOTES));
 $a2 = trim((string)($input['a2'] ?? ''));
-$q3 = trim(sanitizeInput($input['q3'] ?? ''));
+$q3 = trim(htmlspecialchars_decode(strip_tags((string)($input['q3'] ?? '')), ENT_QUOTES));
 $a3 = trim((string)($input['a3'] ?? ''));
 
 if ($q1 === '') $fieldErrors['q1'] = 'Security Question 1 is required';

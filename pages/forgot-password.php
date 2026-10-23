@@ -130,6 +130,7 @@ if (isset($_SESSION['user_id'])) {
             <label class="cyber-label" id="lblQ1">Question 1</label>
             <div class="input-container">
               <input type="password" class="cyber-input" id="ans1" name="ans1" required />
+              <button type="button" class="show-password" onclick="togglePassword('ans1')" aria-label="Toggle visibility"></button>
               <div class="input-glow"></div>
             </div>
           </div>
@@ -137,6 +138,7 @@ if (isset($_SESSION['user_id'])) {
             <label class="cyber-label" id="lblQ2">Question 2</label>
             <div class="input-container">
               <input type="password" class="cyber-input" id="ans2" name="ans2" required />
+              <button type="button" class="show-password" onclick="togglePassword('ans2')" aria-label="Toggle visibility"></button>
               <div class="input-glow"></div>
             </div>
           </div>
@@ -144,6 +146,7 @@ if (isset($_SESSION['user_id'])) {
             <label class="cyber-label" id="lblQ3">Question 3</label>
             <div class="input-container">
               <input type="password" class="cyber-input" id="ans3" name="ans3" required />
+              <button type="button" class="show-password" onclick="togglePassword('ans3')" aria-label="Toggle visibility"></button>
               <div class="input-glow"></div>
             </div>
             <div class="error-message" id="ansError" style="display:none; color: var(--cyber-error); margin-top: 5px;"></div>
@@ -166,6 +169,7 @@ if (isset($_SESSION['user_id'])) {
             <label class="cyber-label" for="newPassword">New Password</label>
             <div class="input-container">
               <input type="password" class="cyber-input" id="newPassword" name="newPassword" required />
+              <button type="button" class="show-password" onclick="togglePassword('newPassword')" aria-label="Toggle visibility"></button>
               <div class="input-glow"></div>
             </div>
           </div>
@@ -173,6 +177,7 @@ if (isset($_SESSION['user_id'])) {
             <label class="cyber-label" for="confirmNewPassword">Confirm Password</label>
             <div class="input-container">
               <input type="password" class="cyber-input" id="confirmNewPassword" name="confirmNewPassword" required />
+              <button type="button" class="show-password" onclick="togglePassword('confirmNewPassword')" aria-label="Toggle visibility"></button>
               <div class="input-glow"></div>
             </div>
             <div class="error-message" id="resetError" style="display:none; color: var(--cyber-error); margin-top: 5px;"></div>

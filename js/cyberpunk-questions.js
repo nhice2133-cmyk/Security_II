@@ -133,6 +133,7 @@ class CyberpunkQuestions {
         const refresh = () => {
             const s1 = q1.value;
             const s2 = q2.value;
+            const s3 = q3.value;
 
             // Helper to rebuild options with exclusions, keeping placeholder
             const rebuild = (select, excludeValues, selectedValue) => {
@@ -158,15 +159,15 @@ class CyberpunkQuestions {
                 }
             };
 
-            // q2 cannot pick q1's choice
-            rebuild(q2, [s1].filter(Boolean), s2);
-            // q3 cannot pick q1 or q2 choices
-            const s3 = q3.value;
-            rebuild(q3, [s1, q2.value].filter(Boolean), s3);
+            // Each question dropdown excludes choices made in the other two
+            rebuild(q1, [s2, s3].filter(Boolean), s1);
+            rebuild(q2, [s1, s3].filter(Boolean), s2);
+            rebuild(q3, [s1, s2].filter(Boolean), s3);
         };
 
         q1.addEventListener('change', refresh);
         q2.addEventListener('change', refresh);
+        q3.addEventListener('change', refresh);
         // Initial pass
         refresh();
     }

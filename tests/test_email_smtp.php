@@ -48,7 +48,8 @@ if (!filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
 }
 
 echo "2. Testing socket connection to $host:$port...\n";
-$fp = @fsockopen($host, $port, $errno, $errstr, 10);
+$socketHost = ($port === 465) ? "ssl://$host" : $host;
+$fp = @fsockopen($socketHost, $port, $errno, $errstr, 10);
 if (!$fp) {
     echo "❌ Failed to connect to $host:$port — $errstr ($errno)\n";
     echo "   Make sure your firewall or network permits outgoing connections on port $port.\n";

@@ -36,10 +36,17 @@ class CyberpunkSecurity {
             qSelects.forEach(select => {
                 Array.from(select.options).forEach(option => {
                     if (option.value === "") return;
-                    if (selectedValues.includes(option.value) && select.value !== option.value) {
+                    const isSelectedElsewhere = (selectedValues.includes(option.value) && select.value !== option.value);
+                    if (isSelectedElsewhere) {
                         option.disabled = true;
+                        option.hidden = true;
+                        option.style.display = 'none';
+                        option.classList.add('sq-option-hidden');
                     } else {
                         option.disabled = false;
+                        option.hidden = false;
+                        option.style.display = '';
+                        option.classList.remove('sq-option-hidden');
                     }
                 });
             });
@@ -348,34 +355,41 @@ class CyberpunkSecurity {
 // Password toggle functionality with cyber SVG
 function togglePassword(fieldId) {
     const field = document.getElementById(fieldId);
-    const button = field.nextElementSibling;
+    if (!field) return;
+    const button = (field.parentElement ? field.parentElement.querySelector('.show-password') : null) || field.nextElementSibling;
     
     if (field.type === 'password') {
         field.type = 'text';
-        button.innerHTML = getEyeSVG(true);
-        button.setAttribute('aria-label', 'Hide password');
-        button.setAttribute('aria-pressed', 'true');
+        if (button) {
+            button.innerHTML = getEyeSVG(true);
+            button.setAttribute('aria-label', 'Hide password');
+            button.setAttribute('aria-pressed', 'true');
+        }
     } else {
         field.type = 'password';
-        button.innerHTML = getEyeSVG(false);
-        button.setAttribute('aria-label', 'Show password');
-        button.setAttribute('aria-pressed', 'false');
+        if (button) {
+            button.innerHTML = getEyeSVG(false);
+            button.setAttribute('aria-label', 'Show password');
+            button.setAttribute('aria-pressed', 'false');
+        }
     }
 }
+window.togglePassword = togglePassword;
 
 // Cyber eye SVG icon
 function getEyeSVG(isVisible) {
     const stroke = isVisible ? '#ff00ff' : '#00eaff';
     const glow = isVisible ? 'rgba(255,0,255,0.6)' : 'rgba(0,234,255,0.6)';
-    const slash = isVisible ? '<path d="M3 3L21 21"></path>' : '';
+    const slash = isVisible ? '<line x1="3" y1="3" x2="21" y2="21" stroke-width="2"></line>' : '';
     return `
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 0 6px ${glow});">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 0 6px ${glow}); pointer-events: none; display: block;">
         <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"></path>
         <circle cx="12" cy="12" r="3"></circle>
         ${slash}
       </svg>
     `;
 }
+window.getEyeSVG = getEyeSVG;
 
 document.addEventListener('DOMContentLoaded', () => {
     new CyberpunkSecurity();

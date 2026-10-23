@@ -92,12 +92,12 @@ if ($user['status'] === 'pending') {
     sendJsonResponse(false, 'Your account is pending admin approval.');
 }
 
-if ($user['status'] === 'inactive' || (isset($user['is_active']) && (int)$user['is_active'] === 0)) {
-    sendJsonResponse(false, 'Your account is inactive. Please contact the current Superadmin to request reactivation.');
-}
-
 if ($user['status'] === 'suspended' || $user['status'] === 'blocked') {
     sendJsonResponse(false, 'Your account has been suspended. Please contact an administrator.');
+}
+
+if ($user['status'] === 'inactive' || (isset($user['is_active']) && (int)$user['is_active'] === 0)) {
+    sendJsonResponse(false, 'Your account is inactive. Please contact an administrator to request reactivation.');
 }
 
 // ── Successful login: reset throttle counter ──────────────────────────────
@@ -112,25 +112,62 @@ if ($user['role'] === 'super_admin') {
         $pdo = $db->getConnection();
         $pdo->beginTransaction();
 
-        // Lock the singleton row — any concurrent login attempt blocks here until we commit/rollback
-        $lockRow = $pdo->prepare("SELECT active_user_id, login_log_id, expires_at FROM super_admin_lock WHERE id = 1 FOR UPDATE");
+        // Lock the singleton row — any concurrent login attempt blocks here until commit/rollback
+        $lockRow = $pdo->prepare("
+            SELECT sal.active_user_id, sal.login_log_id, sal.expires_at,
+                   (sal.expires_at IS NOT NULL AND sal.expires_at < NOW()) AS is_expired,
+                   ll.time_out, u.username, u.status, u.role
+            FROM super_admin_lock sal
+            LEFT JOIN login_logs ll ON sal.login_log_id = ll.id
+            LEFT JOIN users u ON sal.active_user_id = u.id
+            WHERE sal.id = 1 FOR UPDATE
+        ");
         $lockRow->execute();
         $lock = $lockRow->fetch(PDO::FETCH_ASSOC);
 
-        $lockHeld       = ($lock && $lock['active_user_id'] !== null);
-        $lockExpired    = ($lock && $lock['expires_at'] !== null && strtotime($lock['expires_at']) < time());
-        $lockOwnedByMe  = ($lock && (int)$lock['active_user_id'] === (int)$user['id']);
+        $hasLockHolder = ($lock && $lock['active_user_id'] !== null);
+        $isExpired     = ($lock && ($lock['is_expired'] == 1 || ($lock['expires_at'] !== null && strtotime($lock['expires_at']) < time())));
+        $isLogTimedOut = ($lock && $lock['login_log_id'] !== null && $lock['time_out'] !== null);
+        $isUserInvalid = ($lock && $lock['active_user_id'] !== null && ($lock['role'] !== 'super_admin' || !in_array($lock['status'], ['approved', 'active'])));
 
-        if ($lockHeld && !$lockExpired && !$lockOwnedByMe) {
-            // Another Super Admin is active — deny
-            $pdo->rollBack();
-            sendJsonResponse(false,
-                'Another Super Admin is currently active. Please try again after the current Super Admin logs out.',
-                ['locked_by_other' => true]
-            );
+        // If lock was held by a session that expired, timed out, or account is no longer active SA:
+        if ($hasLockHolder && ($isExpired || $isLogTimedOut || $isUserInvalid)) {
+            $pdo->prepare("
+                UPDATE super_admin_lock 
+                SET active_user_id = NULL, login_log_id = NULL, acquired_at = NULL, expires_at = NULL 
+                WHERE id = 1
+            ")->execute();
+            if ($lock['login_log_id'] && !$isLogTimedOut) {
+                $pdo->prepare("UPDATE login_logs SET time_out = NOW() WHERE id = ? AND time_out IS NULL")
+                    ->execute([$lock['login_log_id']]);
+            }
+            $hasLockHolder = false;
         }
 
-        // Close any open sessions for this user (re-login or stale lock)
+        // Strict Single Super Admin Active Login Enforcement:
+        // Only 1 Super Admin can be logged in at a time across the entire system.
+        if ($hasLockHolder) {
+            $pdo->rollBack();
+            $isSameUser = ((int)$lock['active_user_id'] === (int)$user['id']);
+            $holderUsername = $lock['username'] ?? 'Super Admin';
+            $remaining = max(0, strtotime($lock['expires_at']) - time());
+
+            if ($isSameUser) {
+                $msg = 'A Super Admin session is already active for this account. Only 1 Super Admin can be logged in at a time. Please log out from the active session first.';
+            } else {
+                $msg = "Another Super Admin (@{$holderUsername}) is currently active. Only 1 Super Admin can be logged in at a time. Please try again after the current Super Admin logs out.";
+            }
+
+            sendJsonResponse(false, $msg, [
+                'locked'            => true,
+                'locked_by_other'   => true,
+                'is_same_user'      => $isSameUser,
+                'active_username'   => $holderUsername,
+                'remaining_seconds' => $remaining
+            ]);
+        }
+
+        // Close any old open sessions in login_logs for this user
         $pdo->prepare("UPDATE login_logs SET time_out = NOW() WHERE user_id = ? AND time_out IS NULL")
             ->execute([$user['id']]);
 
@@ -138,15 +175,16 @@ if ($user['role'] === 'super_admin') {
         $pdo->prepare("INSERT INTO login_logs (user_id) VALUES (?)")->execute([$user['id']]);
         $logId = $pdo->lastInsertId();
 
-        // Acquire / refresh the lock
-        $pdo->prepare(
-            "UPDATE super_admin_lock
-             SET active_user_id = ?,
-                 login_log_id   = ?,
-                 acquired_at    = NOW(),
-                 expires_at     = DATE_ADD(NOW(), INTERVAL ? SECOND)
-             WHERE id = 1"
-        )->execute([$user['id'], $logId, SESSION_TIMEOUT]);
+        // Acquire the singleton lock
+        $lockTimeout = defined('SUPERADMIN_LOCK_TIMEOUT') ? SUPERADMIN_LOCK_TIMEOUT : 120;
+        $pdo->prepare("
+            UPDATE super_admin_lock
+            SET active_user_id = ?,
+                login_log_id   = ?,
+                acquired_at    = NOW(),
+                expires_at     = DATE_ADD(NOW(), INTERVAL ? SECOND)
+            WHERE id = 1
+        ")->execute([$user['id'], $logId, $lockTimeout]);
 
         $pdo->commit();
 

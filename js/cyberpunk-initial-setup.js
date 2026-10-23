@@ -769,10 +769,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
             Array.from(select.options).forEach(opt => {
                 if (!opt.value) return;
-                if (opt.value !== select.value && selectedValues.includes(opt.value)) {
+                const isSelectedElsewhere = (opt.value !== select.value && selectedValues.includes(opt.value));
+                if (isSelectedElsewhere) {
                     opt.disabled = true;
+                    opt.hidden = true;
+                    opt.style.display = 'none';
+                    opt.classList.add('sq-option-hidden');
                 } else {
                     opt.disabled = false;
+                    opt.hidden = false;
+                    opt.style.display = '';
+                    opt.classList.remove('sq-option-hidden');
                 }
             });
         });
@@ -1076,4 +1083,40 @@ document.addEventListener('DOMContentLoaded', () => {
     if (completeSetupBtn) {
         completeSetupBtn.addEventListener('click', handleInitialSetupSubmit);
     }
+
+    // Initialize cyber-themed eye icons for password fields
+    document.querySelectorAll('.pwd-eye-btn, .show-password').forEach(btn => {
+        btn.setAttribute('aria-label', 'Show password');
+        btn.setAttribute('aria-pressed', 'false');
+        btn.innerHTML = getEyeSVG(false);
+    });
 });
+
+// Cyber eye SVG icon
+function getEyeSVG(isVisible) {
+    const stroke = isVisible ? '#ff00ff' : '#00eaff';
+    const glow = isVisible ? 'rgba(255,0,255,0.6)' : 'rgba(0,234,255,0.6)';
+    const slash = isVisible ? '<line x1="3" y1="3" x2="21" y2="21" stroke-width="2"></line>' : '';
+    return `
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 0 6px ${glow}); pointer-events: none; display: block;">
+        <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"></path>
+        <circle cx="12" cy="12" r="3"></circle>
+        ${slash}
+      </svg>
+    `;
+}
+window.getEyeSVG = getEyeSVG;
+
+function togglePassword(fieldId, btn) {
+    const field = document.getElementById(fieldId);
+    if (!field) return;
+    const button = btn || (field.parentElement ? field.parentElement.querySelector('.pwd-eye-btn, .show-password') : null);
+    const isPass = field.type === 'password';
+    field.type = isPass ? 'text' : 'password';
+    if (button) {
+        button.innerHTML = getEyeSVG(isPass);
+        button.setAttribute('aria-label', isPass ? 'Hide password' : 'Show password');
+        button.setAttribute('aria-pressed', isPass ? 'true' : 'false');
+    }
+}
+window.togglePassword = togglePassword;

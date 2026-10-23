@@ -40,6 +40,25 @@ $q->execute([$user['id']]);
 $row = $q->fetch();
 if (!$row) { echo json_encode(['success' => false, 'message' => 'No security questions set for this account.']); exit; }
 
+function formatSecurityQuestion(string $q): string {
+    $map = [
+        'best_friend_elementary' => "Who is your best friend in Elementary?",
+        'favorite_pet'           => "What is the name of your favorite pet?",
+        'favorite_teacher'       => "Who is your favorite teacher in high school?",
+        'mother_maiden_name'     => "What is your mother's maiden name?",
+        'birth_city'             => "In what city were you born?",
+        'first_car'              => "What was the make and model of your first car?"
+    ];
+    if (isset($map[$q])) {
+        return $map[$q];
+    }
+    return htmlspecialchars_decode($q, ENT_QUOTES | ENT_HTML5);
+}
+
+$row['question1'] = formatSecurityQuestion((string)$row['question1']);
+$row['question2'] = formatSecurityQuestion((string)$row['question2']);
+$row['question3'] = formatSecurityQuestion((string)$row['question3']);
+
 echo json_encode(['success' => true, 'data' => $row]);
 ?>
 

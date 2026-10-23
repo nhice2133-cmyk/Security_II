@@ -28,8 +28,8 @@ if (isset($_SESSION['user_id'])) {
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
     <!-- Modern Design System & Login Styles -->
-    <link rel="stylesheet" href="../css/modern-design-system.css">
-    <link rel="stylesheet" href="../css/cyberpunk-login.css">
+    <link rel="stylesheet" href="../css/modern-design-system.css?v=<?= filemtime(__DIR__ . '/../css/modern-design-system.css') ?>">
+    <link rel="stylesheet" href="../css/cyberpunk-login.css?v=<?= filemtime(__DIR__ . '/../css/cyberpunk-login.css') ?>">
 </head>
 <body>
 
@@ -131,6 +131,8 @@ if (isset($_SESSION['user_id'])) {
                                 </div>
                             <?php endif; ?>
                             
+                            <div id="loginAlertBox" style="display: none; margin-bottom: 1.25rem;"></div>
+
                             <form class="cyber-form" id="loginForm" action="../php/login.php" method="POST">
                                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrfToken(), ENT_QUOTES, 'UTF-8'); ?>" />
                                 <div class="input-group">
@@ -154,9 +156,7 @@ if (isset($_SESSION['user_id'])) {
                                     </div>
                                     <div class="input-container">
                                         <input type="password" id="password" name="password" class="cyber-input" placeholder="Enter your password" />
-                                        <button type="button" class="show-password" id="showPassword" aria-label="Show password">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
-                                        </button>
+                                        <button type="button" class="show-password" id="showPassword" aria-label="Toggle password visibility"></button>
                                     </div>
                                     <div class="error-message" id="password-error"></div>
                                 </div>

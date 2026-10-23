@@ -115,7 +115,7 @@ if (!isset($_SESSION['reg_step1'])) {
                                                 </label>
                                                 <div class="input-container">
                                                     <input type="password" class="cyber-input" id="answer<?= $i ?>" name="answer<?= $i ?>" required>
-                                                    <button type="button" class="show-password" onclick="togglePassword('answer<?= $i ?>')">👁️</button>
+                                                    <button type="button" class="show-password" onclick="togglePassword('answer<?= $i ?>')" aria-label="Toggle password visibility"></button>
                                                     <div class="input-glow"></div>
                                                 </div>
                                                 <div class="error-message" id="answer<?= $i ?>Error"></div>

@@ -43,9 +43,23 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                document.getElementById('question1').value = data.data.question1;
-                document.getElementById('question2').value = data.data.question2;
-                document.getElementById('question3').value = data.data.question3;
+                const map = {
+                    'best_friend_elementary': "Who is your best friend in Elementary?",
+                    'favorite_pet': "What is the name of your favorite pet?",
+                    'favorite_teacher': "Who is your favorite teacher in high school?",
+                    'mother_maiden_name': "What is your mother's maiden name?",
+                    'birth_city': "In what city were you born?",
+                    'first_car': "What was the make and model of your first car?"
+                };
+                const formatQ = (q) => {
+                    if (!q) return '';
+                    if (map[q]) return map[q];
+                    const doc = new DOMParser().parseFromString(q, 'text/html');
+                    return doc.body.textContent || q;
+                };
+                document.getElementById('question1').value = formatQ(data.data.question1);
+                document.getElementById('question2').value = formatQ(data.data.question2);
+                document.getElementById('question3').value = formatQ(data.data.question3);
             } else {
                 showSystemError('Error loading security questions: ' + data.message);
                 setTimeout(() => {
@@ -195,17 +209,45 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 3000);
     }
 
+    // Cyber eye SVG icon
+    function getEyeSVG(isVisible) {
+        const stroke = isVisible ? '#ff00ff' : '#00eaff';
+        const glow = isVisible ? 'rgba(255,0,255,0.6)' : 'rgba(0,234,255,0.6)';
+        const slash = isVisible ? '<line x1="3" y1="3" x2="21" y2="21" stroke-width="2"></line>' : '';
+        return `
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 0 6px ${glow}); pointer-events: none; display: block;">
+            <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+            ${slash}
+          </svg>
+        `;
+    }
+    window.getEyeSVG = getEyeSVG;
+
     // Password visibility toggle
     window.togglePassword = function(fieldId) {
         const field = document.getElementById(fieldId);
+        if (!field) return;
         const button = field.parentNode.querySelector('.show-password');
+        if (!button) return;
         
         if (field.type === 'password') {
             field.type = 'text';
-            button.textContent = '🙈';
+            button.innerHTML = getEyeSVG(true);
+            button.setAttribute('aria-label', 'Hide password');
+            button.setAttribute('aria-pressed', 'true');
         } else {
             field.type = 'password';
-            button.textContent = '👁️';
+            button.innerHTML = getEyeSVG(false);
+            button.setAttribute('aria-label', 'Show password');
+            button.setAttribute('aria-pressed', 'false');
         }
     };
+
+    // Initialize all show-password buttons
+    document.querySelectorAll('.show-password').forEach(btn => {
+        btn.setAttribute('aria-label', 'Show password');
+        btn.setAttribute('aria-pressed', 'false');
+        btn.innerHTML = getEyeSVG(false);
+    });
 });

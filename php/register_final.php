@@ -19,11 +19,11 @@ if (!isset($_SESSION['reg_step1'])) {
 
 $step1 = $_SESSION['reg_step1'];
 
-$q1 = sanitizeInput($payload['question1'] ?? '');
+$q1 = trim(htmlspecialchars_decode(strip_tags((string)($payload['question1'] ?? '')), ENT_QUOTES));
 $a1 = trim((string)($payload['answer1'] ?? ''));
-$q2 = sanitizeInput($payload['question2'] ?? '');
+$q2 = trim(htmlspecialchars_decode(strip_tags((string)($payload['question2'] ?? '')), ENT_QUOTES));
 $a2 = trim((string)($payload['answer2'] ?? ''));
-$q3 = sanitizeInput($payload['question3'] ?? '');
+$q3 = trim(htmlspecialchars_decode(strip_tags((string)($payload['question3'] ?? '')), ENT_QUOTES));
 $a3 = trim((string)($payload['answer3'] ?? ''));
 
 $errors = [];

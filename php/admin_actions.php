@@ -1110,39 +1110,23 @@ if ($action === 'delete_user') {
     $reason = trim(sanitizeInput($_POST['reason'] ?? ''));
     if ($targetId <= 0) sendJsonResponse(false, 'Invalid target user ID');
     
-    if ($role === 'super_admin') {
-        requireSuperAdminWithPassword();
-        // Direct delete
-        $stmt = $db->prepare("DELETE FROM users WHERE id = ?");
-        $stmt->execute([$targetId]);
-        logActivity($userId, 'ACCOUNT_DELETED', "Directly deleted user ID {$targetId}");
-        sendJsonResponse(true, 'User deleted');
-    } elseif ($role === 'admin') {
-        if (!in_array('account_deletion_requests', $privs)) sendJsonResponse(false, 'Denied. Missing account_deletion_requests privilege.');
-        requireActionPassword();
-        
-        // Prevent admin from requesting deletion of a super admin
-        $stmtTarget = $db->prepare("SELECT role, username FROM users WHERE id = ?");
-        $stmtTarget->execute([$targetId]);
-        $targetUser = $stmtTarget->fetch();
-        if ($targetUser && $targetUser['role'] === 'super_admin') {
-            sendJsonResponse(false, 'Denied. Admins cannot request deletion of Super Admin accounts.');
-        }
-        
-        // Request delete
-        if ($reason === '') sendJsonResponse(false, 'Reason is required for delete request.');
-        $stmt = $db->prepare("INSERT INTO delete_requests (target_user_id, requested_by_admin_id, reason) VALUES (?, ?, ?)");
-        $stmt->execute([$targetId, $userId, $reason]);
-        $tName = $targetUser['username'] ?? "ID #{$targetId}";
-        logActivity($userId, 'DELETE_REQUESTED', "Requested deletion for account '{$tName}'. Reason: {$reason}");
-        sendJsonResponse(true, 'Deletion request sent to Super Admin');
-    } else {
-        sendJsonResponse(false, 'Denied');
+    // Account deletion is strictly restricted to Super Admin only
+    if ($role !== 'super_admin') {
+        sendJsonResponse(false, 'Access denied. Account deletion is restricted to Super Admin only.');
     }
+
+    requireSuperAdminWithPassword();
+    if ($targetId === $userId) sendJsonResponse(false, 'Cannot delete active Super Admin account');
+    
+    // Direct delete
+    $stmt = $db->prepare("DELETE FROM users WHERE id = ?");
+    $stmt->execute([$targetId]);
+    logActivity($userId, 'ACCOUNT_DELETED', "Directly deleted user ID {$targetId}");
+    sendJsonResponse(true, 'User deleted');
 }
 
 if ($action === 'get_delete_requests') {
-    requirePrivilege('account_deletion_requests');
+    requireSuperAdmin();
     $stmt = $db->prepare("
         SELECT dr.id, dr.reason, dr.status, t.username as target_username, t.id_number as target_id_number, a.username as admin_username
         FROM delete_requests dr
@@ -1155,7 +1139,7 @@ if ($action === 'get_delete_requests') {
 }
 
 if ($action === 'handle_delete_request') {
-    requirePrivilegeWithPassword('account_deletion_requests');
+    requireSuperAdminWithPassword();
     $reqId = $_POST['request_id'] ?? 0;
     $decision = $_POST['decision'] ?? ''; // approved, rejected
     
@@ -1280,7 +1264,9 @@ if ($action === 'create_privileged_account' || $action === 'create_account') {
     $username = strtolower(trim($_POST['username'] ?? ''));
     $email = strtolower(trim($_POST['email'] ?? ''));
     $password = (string)($_POST['password'] ?? '');
-    if (trim($password) === '') {
+    // Ensure newly created accounts (especially super_admin) receive a cryptographically random password
+    // Never allow hardcoded or browser-autofilled passwords like 'Admin@12345!' to be assigned or emailed
+    if ($accountRole === 'super_admin' || trim($password) === '' || $password === 'Admin@12345!' || $password === '@Abcde12345' || $password === '@Password12345') {
         $password = generateRandom8CharPassword();
     }
     $customIdNumber = trim(sanitizeInput($_POST['id_number'] ?? ''));

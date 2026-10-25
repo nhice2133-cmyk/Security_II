@@ -1009,7 +1009,7 @@ if (!is_array($privs)) $privs = [];
               <span>My Activity Logs</span>
             </button>
           <?php endif; ?>
-          <?php if ($role === 'super_admin' || ($role === 'admin' && in_array('account_deletion_requests', $privs))): ?>
+          <?php if ($role === 'super_admin'): ?>
             <button class="tab-btn" data-tab="delete_reqs" onclick="showTab('delete_reqs')">
               <svg class="tab-btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
               <span>Deletion Requests</span>
@@ -1129,7 +1129,7 @@ if (!is_array($privs)) $privs = [];
                 <span>Audit Logs</span>
               </button>
 
-              <?php if ($role === 'super_admin' || ($role === 'admin' && in_array('account_deletion_requests', $privs))): ?>
+              <?php if ($role === 'super_admin'): ?>
                 <button type="button" class="dash-action-btn" onclick="showTab('delete_reqs')">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path></svg>
                   <span>Deletion Requests <?= $pendingDelCount > 0 ? "($pendingDelCount)" : "" ?></span>
@@ -1712,16 +1712,32 @@ if (!is_array($privs)) $privs = [];
       </div>
       <?php endif; ?>
 
-      <?php if ($role === 'super_admin' || ($role === 'admin' && in_array('account_deletion_requests', $privs))): ?>
+      <?php if ($role === 'super_admin'): ?>
       <div id="delete_reqs" class="tab-content">
         <div class="panel">
-          <div class="panel-hd"><div class="panel-title">Deletion Requests</div></div>
-          <div class="panel-bd">
-            <div style="overflow-x: auto;">
-              <table id="delReqTable">
+          <div class="panel-hd" style="display:flex; justify-content:space-between; align-items:center;">
+            <div style="display:flex; align-items:center; gap:0.75rem;">
+              <div class="panel-title">Deletion Requests</div>
+              <div class="realtime-status-pill" style="border-color: rgba(239, 68, 68, 0.35); background: rgba(239, 68, 68, 0.1); color: #ef4444;" title="Requests waiting for Super Admin approval">
+                <span class="live-dot-pulse" style="background: #ef4444; box-shadow: 0 0 8px #ef4444;"></span>
+                <span class="live-status-text">SUPER ADMIN REVIEW</span>
+              </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:0.5rem;">
+              <button type="button" class="btn-refresh-micro" onclick="loadDeleteRequests()" title="Reload Deletion Requests">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+                </svg>
+                <span>Refresh</span>
+              </button>
+            </div>
+          </div>
+          <div class="panel-bd" style="padding-top: 0.5rem;">
+            <div class="table-responsive-wrapper" style="overflow-x: auto;">
+              <table id="delReqTable" class="modern-data-table">
                 <thead>
                   <tr>
-                    <th>Target User</th>
+                    <th>Target Account</th>
                     <th>Requested By</th>
                     <th>Reason</th>
                     <th>Status</th>
@@ -1783,7 +1799,7 @@ if (!is_array($privs)) $privs = [];
           </div>
         </div>
 
-        <form id="createAccountForm" onsubmit="submitCreateAccountForm(event)" novalidate>
+        <form id="createAccountForm" onsubmit="submitCreateAccountForm(event)" novalidate autocomplete="off">
           <!-- Step 1 Page: Account Credentials & Access -->
           <div id="caStep1Page" class="ca-step-page">
             <div class="ca-section-card">
@@ -1887,7 +1903,7 @@ if (!is_array($privs)) $privs = [];
                     </button>
                   </div>
                   <div class="ca-password-input-wrap" style="position: relative;">
-                    <input type="password" id="caPassword" class="ca-input ca-mono" value="" placeholder="Auto-generated password" style="padding-right: 4.8rem;" oninput="updatePasswordStrength(this.value); clearFieldError('caPassword');">
+                    <input type="password" id="caPassword" class="ca-input ca-mono" value="" placeholder="Auto-generated password" autocomplete="new-password" style="padding-right: 4.8rem;" oninput="updatePasswordStrength(this.value); clearFieldError('caPassword');">
                     <div class="ca-password-actions" style="position: absolute; right: 0.4rem; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 3px;">
                       <button type="button" class="ca-pw-toggle-btn" id="caPwToggleBtn" onclick="toggleCaPasswordVisibility()" title="Show/Hide password" aria-label="Toggle password visibility">
                         <svg id="caPwEyeIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2467,6 +2483,133 @@ if (!is_array($privs)) $privs = [];
     </div>
   </div>
 
+  <!-- Custom Prompt Modal (Modern Cyberpunk Design) -->
+  <div id="customPromptModal" class="modern-modal-backdrop" style="display:none; z-index:999999;" onclick="if(event.target===this) resolveCustomPrompt(null)">
+    <div class="modern-modal-card" style="max-width: 480px; box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.55), 0 0 35px rgba(239, 68, 68, 0.2);">
+      <div class="modern-modal-header" style="padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border-subtle);">
+        <div class="modal-header-branding" style="display: flex; align-items: center; gap: 0.85rem;">
+          <div id="customPromptBadge" class="modal-icon-badge danger" style="width: 42px; height: 42px; border-radius: 12px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #ef4444; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+            </svg>
+          </div>
+          <div>
+            <h3 id="customPromptTitle" class="modal-title" style="font-size: 1.05rem; font-weight: 700; margin: 0; color: var(--text-primary); letter-spacing: -0.01em;">REQUEST ACCOUNT DELETION</h3>
+            <p id="customPromptSubtitle" class="modal-subtitle" style="font-size: 0.78rem; color: var(--text-muted); margin: 2px 0 0 0;">Superadmin Deletion Approval Required</p>
+          </div>
+        </div>
+        <button type="button" class="modal-close-btn" onclick="resolveCustomPrompt(null)" aria-label="Close dialog" title="Cancel" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; transition: all 0.2s;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+
+      <div class="modern-modal-body" style="padding: 1.35rem 1.5rem 1.15rem 1.5rem;">
+        <!-- Target Account Info (when applicable) -->
+        <div id="customPromptTargetWrap" style="display:none; margin-bottom: 0.85rem; padding: 0.75rem 0.95rem; background: var(--bg-surface-hover, rgba(255,255,255,0.03)); border: 1px solid var(--border-color, rgba(255,255,255,0.08)); border-radius: 10px; font-size: 0.82rem;">
+          <div style="display:flex; align-items:center; gap:0.55rem;">
+            <span style="font-size:1.05rem;">👤</span>
+            <div>
+              <div style="font-size:0.72rem; color:var(--text-muted); font-weight:700; letter-spacing:0.04em;">TARGET ACCOUNT</div>
+              <div id="customPromptTargetName" style="color:var(--text-primary); font-weight:600; font-size:0.86rem; margin-top:1px;"></div>
+            </div>
+          </div>
+        </div>
+
+        <p id="customPromptMessage" style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.5; margin: 0 0 0.85rem 0; word-wrap: break-word;">
+          Enter reason for deletion (goes to Super Admin):
+        </p>
+
+        <div style="position: relative;">
+          <textarea id="customPromptInput" class="modal-custom-input" rows="3" placeholder="State reason for requesting deletion..." style="width: 100%; box-sizing: border-box; resize: vertical; min-height: 80px; font-size: 0.88rem; line-height: 1.45;"></textarea>
+        </div>
+        <div id="customPromptError" style="display:none; color: var(--danger, #ef4444); font-size: 0.78rem; margin-top: 0.4rem; font-weight:500;">Please enter a reason before submitting.</div>
+      </div>
+
+      <div class="modern-modal-footer" style="display: flex; justify-content: flex-end; gap: 0.75rem; padding: 1rem 1.5rem; border-top: 1px solid var(--border-subtle); background: var(--bg-surface-subtle, rgba(0,0,0,0.02));">
+        <button type="button" class="btn-modal-cancel" onclick="resolveCustomPrompt(null)" style="padding: 0.62rem 1.35rem; border-radius: 10px; font-weight: 500; font-size: 0.88rem; cursor: pointer;">Cancel</button>
+        <button type="button" id="customPromptSubmitBtn" class="btn-modal-submit btn-danger-glow" onclick="submitCustomPrompt()" style="padding: 0.62rem 1.85rem; border-radius: 10px; font-weight: 600; font-size: 0.88rem; cursor: pointer;">
+          <span>Submit Request</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- View Deletion Request Reason Modal -->
+  <div id="viewDeletionReasonModal" class="modern-modal-backdrop" style="display:none; z-index:999999;" onclick="if(event.target===this) closeViewDeletionReasonModal()">
+    <div class="modern-modal-card" style="max-width: 520px; box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.55), 0 0 35px rgba(239, 68, 68, 0.22);">
+      <div class="modern-modal-header" style="padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border-subtle);">
+        <div class="modal-header-branding" style="display: flex; align-items: center; gap: 0.85rem;">
+          <div class="modal-icon-badge danger" style="width: 42px; height: 42px; border-radius: 12px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #ef4444; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+          </div>
+          <div>
+            <h3 class="modal-title" style="font-size: 1.05rem; font-weight: 700; margin: 0; color: var(--text-primary); letter-spacing: -0.01em;">DELETION REQUEST REASON</h3>
+            <p class="modal-subtitle" style="font-size: 0.78rem; color: var(--text-muted); margin: 2px 0 0 0;">Superadmin Review &amp; Approval</p>
+          </div>
+        </div>
+        <button type="button" class="modal-close-btn" onclick="closeViewDeletionReasonModal()" aria-label="Close dialog" title="Close" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; transition: all 0.2s;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+
+      <div class="modern-modal-body" style="padding: 1.35rem 1.5rem 1.15rem 1.5rem;">
+        <!-- Request Summary Card -->
+        <div style="background: var(--bg-surface-hover, rgba(255, 255, 255, 0.03)); border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08)); border-radius: 12px; padding: 0.95rem 1.15rem; margin-bottom: 1.25rem;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem;">
+            <div>
+              <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;">Target Account</div>
+              <div id="viewDelTargetUser" style="color: var(--text-primary); font-weight: 600; font-size: 0.88rem; margin-top: 3px; word-break: break-all;"></div>
+            </div>
+            <div>
+              <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;">Requested By</div>
+              <div id="viewDelRequestedBy" style="color: var(--text-primary); font-weight: 600; font-size: 0.88rem; margin-top: 3px;"></div>
+            </div>
+            <div>
+              <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;">Request Status</div>
+              <div id="viewDelStatus" style="margin-top: 3px;"></div>
+            </div>
+            <div>
+              <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;">Request ID</div>
+              <div id="viewDelReqId" style="color: var(--text-secondary); font-family: monospace; font-size: 0.85rem; margin-top: 3px;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Submitted Reason Statement -->
+        <div style="margin-bottom: 1.25rem;">
+          <label style="display: block; font-size: 0.76rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.45rem;">
+            Formal Statement / Reason Submitted:
+          </label>
+          <div id="viewDelReasonBox" class="reason-quote-box"></div>
+        </div>
+
+        <!-- Warning Callout -->
+        <div style="font-size: 0.78rem; line-height: 1.45; color: var(--text-muted); background: rgba(245, 158, 11, 0.06); border: 1px solid rgba(245, 158, 11, 0.2); border-radius: 8px; padding: 0.65rem 0.85rem; display: flex; align-items: center; gap: 0.5rem;">
+          <span style="font-size: 1rem; flex-shrink: 0;">⚠️</span>
+          <span>Approving this deletion permanently purges the target account and credentials from the system.</span>
+        </div>
+      </div>
+
+      <div class="modern-modal-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; border-top: 1px solid var(--border-subtle); background: var(--bg-surface-subtle, rgba(0,0,0,0.02));">
+        <button type="button" class="btn-modal-cancel" onclick="closeViewDeletionReasonModal()" style="padding: 0.62rem 1.35rem; border-radius: 10px; font-weight: 500; font-size: 0.88rem; cursor: pointer;">Close</button>
+        <div id="viewDelModalActions" style="display: flex; gap: 0.65rem;">
+          <button type="button" id="viewDelModalRejectBtn" class="table-action-btn btn-action-delete" style="padding: 0.62rem 1.25rem; font-size: 0.86rem; border-radius: 10px; cursor: pointer;">
+            ✕ Reject Request
+          </button>
+          <button type="button" id="viewDelModalApproveBtn" class="btn-modal-submit btn-danger-glow" style="padding: 0.62rem 1.35rem; font-size: 0.86rem; border-radius: 10px; cursor: pointer;">
+            ✓ Approve &amp; Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Edit User Modal -->
   <div id="editUserModal" style="display:none; position:fixed; inset:0; background:var(--bg-backdrop, rgba(15, 23, 42, 0.65)); z-index:9999; align-items:center; justify-content:center; backdrop-filter: blur(8px); padding: 1.5rem;">
     <div class="panel" style="width:100%; max-width:520px; margin: auto; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 16px; box-shadow: var(--shadow-xl);">
@@ -2709,6 +2852,17 @@ if (!is_array($privs)) $privs = [];
               <span>DESIGNATED SUCCESSOR (ACTIVE ADMINISTRATORS)</span>
               <span class="req-star" style="color:var(--danger)">*</span>
             </label>
+            <!-- Search Filter for Designated Successor -->
+            <div class="succ-search-container">
+              <span class="succ-search-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+              </span>
+              <input type="text" id="succSearchInput" class="modal-custom-input succ-search-input" placeholder="Search admin by name, username, email, ID..." oninput="filterSuccessorOptions()" onkeydown="handleSuccessorSearchKey(event)" autocomplete="off" />
+              <button type="button" id="succSearchClear" class="succ-search-clear" onclick="clearSuccessorSearch()" title="Clear search">✕</button>
+            </div>
             <select id="succSuccessorSelect" class="modal-custom-input" required onchange="onSuccessorSelected()">
               <option value="">-- Select an eligible Active Administrator --</option>
             </select>

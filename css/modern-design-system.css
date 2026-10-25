@@ -2365,6 +2365,100 @@ input::placeholder {
   margin: 0;
 }
 
+/* Successor Search Filter */
+.succ-search-container {
+  position: relative;
+  margin-bottom: 0.5rem;
+}
+.succ-search-icon {
+  position: absolute;
+  left: 0.85rem;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  opacity: 0.6;
+  display: flex;
+  align-items: center;
+  color: var(--text-secondary);
+}
+.succ-search-input {
+  width: 100%;
+  padding-left: 2.35rem !important;
+  padding-right: 2.2rem !important;
+  font-size: 0.84rem !important;
+  background: var(--bg-surface-hover, rgba(255, 255, 255, 0.04)) !important;
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.12)) !important;
+  border-radius: 8px !important;
+  color: var(--text-primary) !important;
+  transition: all 0.2s ease !important;
+}
+.succ-search-input:focus {
+  border-color: var(--accent, #6366f1) !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15) !important;
+}
+.succ-search-clear {
+  position: absolute;
+  right: 0.65rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text-muted, #888);
+  cursor: pointer;
+  display: none;
+  padding: 0.25rem 0.4rem;
+  line-height: 1;
+  font-size: 0.85rem;
+  border-radius: 50%;
+  transition: all 0.15s ease;
+}
+.succ-search-clear:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Deletion Requests Table & Reason Pill */
+.btn-view-reason-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.38rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-radius: 8px;
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  color: var(--accent, #6366f1);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.btn-view-reason-pill:hover {
+  background: rgba(99, 102, 241, 0.22);
+  border-color: var(--accent, #6366f1);
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+.btn-view-reason-pill svg {
+  color: currentColor;
+  stroke: currentColor;
+}
+
+.reason-quote-box {
+  background: rgba(239, 68, 68, 0.05);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-left: 4px solid var(--danger, #ef4444);
+  border-radius: 8px;
+  padding: 1rem 1.15rem;
+  color: var(--text-primary);
+  font-size: 0.92rem;
+  line-height: 1.6;
+  word-break: break-word;
+  white-space: pre-wrap;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
 .succ-confirm-check-wrap {
   margin: 1.25rem 0;
   padding: 0.85rem 1rem;
@@ -3086,3 +3180,137 @@ html:not([data-theme="dark"]) .login-alert-banner .login-alert-text {
 [data-theme="dark"] .ca-input[readonly] {
   color: #ffffff !important;
 }
+
+/* ==========================================================================
+   Deletion Requests Modern Table & Reason View Modal Styling
+   ========================================================================== */
+.btn-view-reason-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.38rem 0.85rem;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #6366f1;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.28);
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.btn-view-reason-pill svg {
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.btn-view-reason-pill:hover {
+  background: rgba(99, 102, 241, 0.16);
+  border-color: rgba(99, 102, 241, 0.5);
+  color: #4f46e5;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
+  transform: translateY(-1px);
+}
+
+.btn-view-reason-pill:hover svg {
+  transform: scale(1.15);
+}
+
+.btn-view-reason-pill:active {
+  transform: translateY(0);
+}
+
+[data-theme="dark"] .btn-view-reason-pill {
+  color: #a5b4fc;
+  background: rgba(99, 102, 241, 0.14);
+  border-color: rgba(99, 102, 241, 0.35);
+}
+
+[data-theme="dark"] .btn-view-reason-pill:hover {
+  background: rgba(99, 102, 241, 0.26);
+  border-color: rgba(165, 180, 252, 0.6);
+  color: #ffffff;
+  box-shadow: 0 0 16px rgba(99, 102, 241, 0.4);
+}
+
+.reason-quote-box {
+  background: var(--bg-surface-subtle, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-left: 4px solid var(--danger, #ef4444);
+  border-radius: 10px;
+  padding: 1rem 1.15rem;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 180px;
+  overflow-y: auto;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.reason-quote-box::-webkit-scrollbar {
+  width: 5px;
+}
+.reason-quote-box::-webkit-scrollbar-thumb {
+  background: rgba(239, 68, 68, 0.3);
+  border-radius: 4px;
+}
+
+.del-req-target-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.del-req-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #ef4444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  flex-shrink: 0;
+}
+
+.del-req-target-name {
+  font-weight: 600;
+  font-size: 0.88rem;
+  color: var(--text-primary);
+  line-height: 1.25;
+}
+
+.del-req-target-id {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+.del-req-admin-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.22rem 0.55rem;
+  border-radius: 6px;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--primary, #6366f1);
+}
+
+[data-theme="dark"] .del-req-admin-badge {
+  background: rgba(99, 102, 241, 0.16);
+  border-color: rgba(99, 102, 241, 0.32);
+  color: #a5b4fc;
+}
+

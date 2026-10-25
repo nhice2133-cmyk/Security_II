@@ -13,10 +13,113 @@ function escapeHtml(str) {
         .replace(/'/g, '&#039;');
 }
 
-window.customPrompt = function(msg) {
-    // For simplicity, fallback to native prompt, but you can build a custom prompt modal if needed.
-    return Promise.resolve(prompt(msg));
+// --- Custom Prompt Modal ---
+let promptResolve = null;
+let promptKeyHandler = null;
+
+window.customPrompt = function(msg, defaultValue = '', options = {}) {
+    return new Promise(resolve => {
+        const modal = document.getElementById('customPromptModal');
+        if (!modal) {
+            resolve(prompt(msg, defaultValue));
+            return;
+        }
+
+        const msgEl = document.getElementById('customPromptMessage');
+        const inputEl = document.getElementById('customPromptInput');
+        const titleEl = document.getElementById('customPromptTitle');
+        const subtitleEl = document.getElementById('customPromptSubtitle');
+        const submitBtn = document.getElementById('customPromptSubmitBtn');
+        const errorEl = document.getElementById('customPromptError');
+        const targetWrap = document.getElementById('customPromptTargetWrap');
+        const targetName = document.getElementById('customPromptTargetName');
+
+        if (msgEl) msgEl.textContent = msg || 'Enter reason for deletion (goes to Super Admin):';
+        if (inputEl) {
+            inputEl.value = defaultValue || '';
+            inputEl.placeholder = options.placeholder || 'Enter reason here...';
+        }
+        if (errorEl) {
+            errorEl.style.display = 'none';
+            errorEl.textContent = '';
+        }
+
+        if (titleEl) titleEl.textContent = options.title || 'REQUEST ACCOUNT DELETION';
+        if (subtitleEl) subtitleEl.textContent = options.subtitle || 'Superadmin Deletion Approval Required';
+
+        if (targetWrap && targetName) {
+            if (options.targetUser) {
+                targetName.textContent = options.targetUser;
+                targetWrap.style.display = 'block';
+            } else {
+                targetWrap.style.display = 'none';
+            }
+        }
+
+        if (submitBtn) {
+            const btnSpan = submitBtn.querySelector('span') || submitBtn;
+            btnSpan.textContent = options.confirmText || 'Submit Request';
+            if (options.isDanger !== false) {
+                submitBtn.className = 'btn-modal-submit btn-danger-glow';
+            } else {
+                submitBtn.className = 'btn-modal-submit btn-primary';
+            }
+        }
+
+        modal.style.display = 'flex';
+        if (inputEl) {
+            setTimeout(() => {
+                inputEl.focus();
+                inputEl.select();
+            }, 30);
+        }
+
+        if (promptKeyHandler) document.removeEventListener('keydown', promptKeyHandler);
+        promptKeyHandler = function(e) {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                window.resolveCustomPrompt(null);
+            } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                window.submitCustomPrompt();
+            }
+        };
+        document.addEventListener('keydown', promptKeyHandler);
+
+        promptResolve = (val) => {
+            if (promptKeyHandler) document.removeEventListener('keydown', promptKeyHandler);
+            promptKeyHandler = null;
+            resolve(val);
+        };
+    });
 };
+
+window.submitCustomPrompt = function() {
+    const inputEl = document.getElementById('customPromptInput');
+    const errorEl = document.getElementById('customPromptError');
+    const val = inputEl ? inputEl.value.trim() : '';
+
+    if (!val) {
+        if (errorEl) {
+            errorEl.textContent = 'Please enter a reason before submitting.';
+            errorEl.style.display = 'block';
+        }
+        if (inputEl) inputEl.focus();
+        return;
+    }
+
+    window.resolveCustomPrompt(val);
+};
+
+window.resolveCustomPrompt = function(result) {
+    const modal = document.getElementById('customPromptModal');
+    if (modal) modal.style.display = 'none';
+    if (promptResolve) {
+        promptResolve(result);
+        promptResolve = null;
+    }
+};
+
 // --- Custom Modals ---
 let alertResolve = null;
 let alertEnterHandler = null;
@@ -752,7 +855,7 @@ async function loadUsers(page = null, isSilent = false) {
                 if (isTargetCurrentSa) {
                     const saHeader = document.createElement('div');
                     saHeader.className = 'dropdown-sa-header';
-                    saHeader.innerHTML = '👑 Primary Superadmin (Active)';
+                    saHeader.innerHTML = 'Current Superadmin (Active)';
                     menu.appendChild(saHeader);
                     hasSecondary = true;
                 }
@@ -822,7 +925,7 @@ async function loadUsers(page = null, isSilent = false) {
                     hasSecondary = true;
                 }
 
-                // Delete User / Request Deletion
+                // Delete User (Superadmin only)
                 if (isSuperAdmin && !isTargetCurrentSa) {
                     if (hasSecondary) {
                         const div = document.createElement('div');
@@ -830,14 +933,6 @@ async function loadUsers(page = null, isSilent = false) {
                         menu.appendChild(div);
                     }
                     menu.appendChild(makeDropdownItem('<span>🗑️</span> Delete User', 'item-delete', 'delete', 'Permanently Delete User'));
-                    hasSecondary = true;
-                } else if (isAdmin && userPrivileges.includes('account_deletion_requests') && !isTargetCurrentSa) {
-                    if (hasSecondary) {
-                        const div = document.createElement('div');
-                        div.className = 'dropdown-divider';
-                        menu.appendChild(div);
-                    }
-                    menu.appendChild(makeDropdownItem('<span>🗑️</span> Request Deletion', 'item-delete', 'req_delete', 'Submit Deletion Request'));
                     hasSecondary = true;
                 }
 
@@ -899,13 +994,7 @@ async function loadUsers(page = null, isSilent = false) {
                 nameSpan.textContent = fullName;
                 nameSpan.style.fontWeight = '600';
                 nameTd.appendChild(nameSpan);
-                if (isTargetCurrentSa) {
-                    const crown = document.createElement('span');
-                    crown.className = 'sa-crown-badge';
-                    crown.title = 'Primary Authorized Superadmin';
-                    crown.textContent = '👑';
-                    nameTd.appendChild(crown);
-                } else if (isTargetFormerSa) {
+                if (isTargetFormerSa) {
                     const fBadge = document.createElement('span');
                     fBadge.className = 'former-sa-badge';
                     fBadge.title = 'Former Superadmin';
@@ -933,7 +1022,7 @@ async function loadUsers(page = null, isSilent = false) {
                 if (isTargetCurrentSa) {
                     const saRoleBadge = document.createElement('span');
                     saRoleBadge.className = 'priv-role-badge role-current-superadmin';
-                    saRoleBadge.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg> PRIMARY SUPER ADMIN';
+                    saRoleBadge.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg> CURRENT SUPERADMIN';
                     roleTd.appendChild(saRoleBadge);
                 } else if (isTargetFormerSa) {
                     const regRoleBadge = document.createElement('span');
@@ -1049,9 +1138,9 @@ function attachUserTableListeners() {
         } else if (action === 'unblock') {
             await updateStatus(uid, 'approved');
         } else if (action === 'delete') {
-            await deleteUser(uid, false);
+            await deleteUser(uid, false, btn.dataset.username || '', btn.dataset.fullname || '');
         } else if (action === 'req_delete') {
-            await deleteUser(uid, true);
+            await deleteUser(uid, true, btn.dataset.username || '', btn.dataset.fullname || '');
         } else if (action === 'edit') {
             openEditModal(uid, btn.dataset.firstName, btn.dataset.lastName, btn.dataset.email, btn.dataset.phone, btn.dataset.username, btn.dataset.role, btn.dataset.idno);
         } else if (action === 'privileges') {
@@ -1260,17 +1349,30 @@ async function updateRole(id, role, confirmTransfer = false) {
     }
 }
 
-async function deleteUser(id, isRequest) {
+async function deleteUser(id, isRequest, username = '', fullname = '') {
     let reason = '';
     let pwd = '';
     if (isRequest) {
-        reason = await customPrompt("Enter reason for deletion (goes to Super Admin):");
+        const targetDisplay = fullname ? `${fullname} (@${username})` : (username ? `@${username}` : `User ID #${id}`);
+        reason = await customPrompt(
+            "State the administrative reason for this deletion request. It will be submitted to the Superadmin for review and final execution.",
+            "",
+            {
+                title: "REQUEST ACCOUNT DELETION",
+                subtitle: "Superadmin Deletion Approval Required",
+                placeholder: "State reason for requesting deletion...",
+                confirmText: "Submit Deletion Request",
+                targetUser: targetDisplay,
+                isDanger: true
+            }
+        );
         if (!reason) return;
         if (userRole === 'super_admin' || userRole === 'admin') {
             try { pwd = await promptSaPassword(); } catch (e) { return; }
         }
     } else {
-        if (!await customConfirm("Are you sure you want to permanently delete this user?")) return;
+        const targetDisplay = fullname ? ` "${fullname}" (@${username})` : (username ? ` @${username}` : '');
+        if (!await customConfirm(`Are you sure you want to permanently delete user${targetDisplay}? This action cannot be undone.`)) return;
         if (userRole === 'super_admin' || userRole === 'admin') {
             try { pwd = await promptSaPassword(); } catch (e) { return; }
         }
@@ -1278,11 +1380,11 @@ async function deleteUser(id, isRequest) {
     
     const res = await apiCall('delete_user', { target_id: id, reason, action_confirm_password: pwd });
     if (res.success) {
-        await customAlert(res.message);
+        await customAlert(res.message, 'success', isRequest ? 'REQUEST SUBMITTED' : 'ACCOUNT DELETED', isRequest ? 'Sent to Super Admin for approval' : 'User removal completed');
         lastUsersPayloadHash = '';
         loadUsers(usersPage, false);
     } else {
-        await customAlert(res.message);
+        await customAlert(res.message, 'error', 'DELETION FAILED', 'Action could not be completed');
     }
 }
 
@@ -1453,7 +1555,68 @@ function resetLogFilters() {
     loadLogs(1);
 }
 
+let currentDeleteRequests = {};
+
+function openViewDeletionReasonModal(reqId) {
+    const modal = document.getElementById('viewDeletionReasonModal');
+    if (!modal) return;
+
+    const r = currentDeleteRequests[reqId];
+    if (!r) {
+        customAlert('Deletion request details not found.');
+        return;
+    }
+
+    const targetEl = document.getElementById('viewDelTargetUser');
+    const adminEl = document.getElementById('viewDelRequestedBy');
+    const statusEl = document.getElementById('viewDelStatus');
+    const reqIdEl = document.getElementById('viewDelReqId');
+    const reasonBox = document.getElementById('viewDelReasonBox');
+
+    if (targetEl) {
+        targetEl.innerHTML = `<span style="color:var(--text-primary); font-weight:600;">@${escapeHtml(r.target_username || 'Unknown')}</span> <span style="font-family:monospace; color:var(--text-muted); font-size:0.8rem;">(${escapeHtml(r.target_id_number || 'N/A')})</span>`;
+    }
+    if (adminEl) {
+        adminEl.innerHTML = `<span class="del-req-admin-badge"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg> <span>@${escapeHtml(r.admin_username || 'admin')}</span></span>`;
+    }
+    if (statusEl) {
+        const st = (r.status || 'pending').toLowerCase();
+        statusEl.innerHTML = `<span class="status-pill status-${escapeHtml(st)}"><span class="status-dot"></span><span>${escapeHtml(st.toUpperCase())}</span></span>`;
+    }
+    if (reqIdEl) {
+        reqIdEl.textContent = '#' + (r.id || reqId);
+    }
+    if (reasonBox) {
+        reasonBox.textContent = (r.reason && r.reason.trim()) ? r.reason.trim() : 'No specific reason was provided for this deletion request.';
+    }
+
+    // Configure Quick Action buttons inside the modal
+    const rejectBtn = document.getElementById('viewDelModalRejectBtn');
+    const approveBtn = document.getElementById('viewDelModalApproveBtn');
+
+    if (rejectBtn) {
+        rejectBtn.onclick = async () => {
+            await handleDeleteReq(r.id, 'rejected');
+        };
+    }
+    if (approveBtn) {
+        approveBtn.onclick = async () => {
+            await handleDeleteReq(r.id, 'approved');
+        };
+    }
+
+    modal.style.display = 'flex';
+}
+
+function closeViewDeletionReasonModal() {
+    const modal = document.getElementById('viewDeletionReasonModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
 async function loadDeleteRequests() {
+    if (userRole !== 'super_admin') return;
     const tbody = document.querySelector('#delReqTable tbody');
     if (tbody) {
         tbody.innerHTML = '<tr><td colspan="5" class="table-state-cell"><div class="table-loading-spinner"></div><div>Loading deletion requests...</div></td></tr>';
@@ -1465,6 +1628,8 @@ async function loadDeleteRequests() {
             if (!tbody) return;
             while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
 
+            currentDeleteRequests = {};
+
             if (!res.data.requests || res.data.requests.length === 0) {
                 const tr = document.createElement('tr');
                 tr.innerHTML = '<td colspan="5" class="table-state-cell"><div style="font-size:1.5rem; margin-bottom:0.4rem;">✓</div><div>No pending deletion requests found.</div></td>';
@@ -1472,75 +1637,115 @@ async function loadDeleteRequests() {
                 return;
             }
 
-        res.data.requests.forEach(r => {
-            const tr = document.createElement('tr');
+            res.data.requests.forEach(r => {
+                currentDeleteRequests[r.id] = r;
 
-            function mkTd(val) {
-                const td = document.createElement('td');
-                td.textContent = val || '';
-                return td;
-            }
+                const tr = document.createElement('tr');
 
-            tr.appendChild(mkTd((r.target_username || '') + ' (' + (r.target_id_number || '') + ')'));
-            tr.appendChild(mkTd(r.admin_username));
-            
-            const reasonTd = document.createElement('td');
-            const viewBtn = document.createElement('button');
-            viewBtn.className = 'btn-small';
-            viewBtn.textContent = 'View';
-            viewBtn.addEventListener('click', () => {
-                customAlert(r.reason || 'No reason provided.');
+                // Target Account cell with avatar & styling
+                const targetTd = document.createElement('td');
+                targetTd.innerHTML = `
+                    <div class="del-req-target-cell">
+                        <div class="del-req-avatar" title="Target for deletion">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <div class="del-req-target-name">${escapeHtml(r.target_username || 'Unknown')}</div>
+                            <div class="del-req-target-id">${escapeHtml(r.target_id_number || 'N/A')}</div>
+                        </div>
+                    </div>
+                `;
+                tr.appendChild(targetTd);
+
+                // Requested By cell with badge
+                const adminTd = document.createElement('td');
+                adminTd.innerHTML = `
+                    <span class="del-req-admin-badge">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                        </svg>
+                        <span>${escapeHtml(r.admin_username || 'admin')}</span>
+                    </span>
+                `;
+                tr.appendChild(adminTd);
+
+                // Reason cell with modern view pill button
+                const reasonTd = document.createElement('td');
+                reasonTd.innerHTML = `
+                    <button type="button" class="btn-view-reason-pill" data-action="view_reason" data-req-id="${r.id}" onclick="openViewDeletionReasonModal('${r.id}')" title="View submitted reason statement">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                        <span>View Reason</span>
+                    </button>
+                `;
+                tr.appendChild(reasonTd);
+
+                // Status cell with status pill
+                const statusTd = document.createElement('td');
+                const st = (r.status || 'pending').toLowerCase();
+                statusTd.innerHTML = `
+                    <span class="status-pill status-${escapeHtml(st)}">
+                        <span class="status-dot"></span>
+                        <span>${escapeHtml(st.toUpperCase())}</span>
+                    </span>
+                `;
+                tr.appendChild(statusTd);
+
+                // Actions cell
+                const actionsTd = document.createElement('td');
+                const actionsWrapper = document.createElement('div');
+                actionsWrapper.className = 'actions-cell-wrapper';
+
+                const approveBtn = document.createElement('button');
+                approveBtn.type = 'button';
+                approveBtn.className = 'table-action-btn btn-action-approve';
+                approveBtn.textContent = '✓ Approve';
+                approveBtn.dataset.reqId = r.id;
+                approveBtn.dataset.decision = 'approved';
+
+                const rejectBtn = document.createElement('button');
+                rejectBtn.type = 'button';
+                rejectBtn.className = 'table-action-btn btn-action-delete';
+                rejectBtn.textContent = '✕ Reject';
+                rejectBtn.dataset.reqId = r.id;
+                rejectBtn.dataset.decision = 'rejected';
+
+                actionsWrapper.appendChild(approveBtn);
+                actionsWrapper.appendChild(rejectBtn);
+                actionsTd.appendChild(actionsWrapper);
+                tr.appendChild(actionsTd);
+                tbody.appendChild(tr);
             });
-            reasonTd.appendChild(viewBtn);
-            tr.appendChild(reasonTd);
-            
-            tr.appendChild(mkTd(r.status));
 
-            const actionsTd = document.createElement('td');
-            const actionsWrapper = document.createElement('div');
-            actionsWrapper.className = 'actions-cell-wrapper';
-
-            const approveBtn = document.createElement('button');
-            approveBtn.type = 'button';
-            approveBtn.className = 'table-action-btn btn-action-approve';
-            approveBtn.textContent = '✓ Approve';
-            approveBtn.dataset.reqId = r.id;
-            approveBtn.dataset.decision = 'approved';
-
-            const rejectBtn = document.createElement('button');
-            rejectBtn.type = 'button';
-            rejectBtn.className = 'table-action-btn btn-action-delete';
-            rejectBtn.textContent = '✕ Reject';
-            rejectBtn.dataset.reqId = r.id;
-            rejectBtn.dataset.decision = 'rejected';
-
-            actionsWrapper.appendChild(approveBtn);
-            actionsWrapper.appendChild(rejectBtn);
-            actionsTd.appendChild(actionsWrapper);
-            tr.appendChild(actionsTd);
-            tbody.appendChild(tr);
-        });
-
-        // Delegate click handling safely without duplicate listener leaks
-        const fresh = tbody.cloneNode(true);
-        tbody.parentNode.replaceChild(fresh, tbody);
-        fresh.addEventListener('click', async (e) => {
-            const btn = e.target.closest('[data-decision]');
-            if (!btn) return;
-            await handleDeleteReq(btn.dataset.reqId, btn.dataset.decision);
-        });
-    } else {
+            // Delegate click handling safely
+            const fresh = tbody.cloneNode(true);
+            tbody.parentNode.replaceChild(fresh, tbody);
+            fresh.addEventListener('click', async (e) => {
+                const viewBtn = e.target.closest('[data-action="view_reason"]');
+                if (viewBtn) {
+                    openViewDeletionReasonModal(viewBtn.dataset.reqId);
+                    return;
+                }
+                const btn = e.target.closest('[data-decision]');
+                if (!btn) return;
+                await handleDeleteReq(btn.dataset.reqId, btn.dataset.decision);
+            });
+        } else {
+            if (tbody) {
+                tbody.innerHTML = `<tr><td colspan="5" class="table-state-cell" style="color:var(--danger);">${escapeHtml(res.message || 'Failed to load requests.')}</td></tr>`;
+            }
+        }
+    } catch (err) {
+        console.error('Error loading delete requests:', err);
+        const tbody = document.querySelector('#delReqTable tbody');
         if (tbody) {
-            tbody.innerHTML = `<td colspan="5" class="table-state-cell" style="color:var(--danger);">${escapeHtml(res.message || 'Failed to load requests.')}</td>`;
+            tbody.innerHTML = '<tr><td colspan="5" class="table-state-cell" style="color:var(--danger);">Network error loading deletion requests.</td></tr>';
         }
     }
-} catch (err) {
-    console.error('Error loading delete requests:', err);
-    const tbody = document.querySelector('#delReqTable tbody');
-    if (tbody) {
-        tbody.innerHTML = '<td colspan="5" class="table-state-cell" style="color:var(--danger);">Network error loading deletion requests.</td>';
-    }
-}
 }
 
 async function handleDeleteReq(id, decision) {
@@ -1553,8 +1758,9 @@ async function handleDeleteReq(id, decision) {
     
     const res = await apiCall('handle_delete_request', { request_id: id, decision, action_confirm_password: pwd });
     if (res.success) {
+        closeViewDeletionReasonModal();
         loadDeleteRequests();
-        if (document.getElementById('users').classList.contains('active')) {
+        if (document.getElementById('users') && document.getElementById('users').classList.contains('active')) {
             loadUsers(usersPage);
         }
     } else {
@@ -2096,6 +2302,15 @@ function validateRoleField() {
         if (privGroupAdmin) privGroupAdmin.style.display = 'block';
         if (privGroupAudit) privGroupAudit.style.display = 'block';
         setCaPrivPreset('all');
+
+        // Always ensure a newly generated random password for Superadmin, never autofilled with Admin@12345!
+        const pwdEl = document.getElementById('caPassword');
+        if (pwdEl && (!pwdEl.value || pwdEl.value === 'Admin@12345!' || pwdEl.value === '@Abcde12345' || pwdEl.value === '@Password12345')) {
+            const newPwd = generateRandomPassword();
+            pwdEl.value = newPwd;
+            updatePasswordStrength(newPwd);
+            clearFieldError('caPassword', 'caPasswordError');
+        }
     } else if (role === 'admin') {
         if (handoverGroup) handoverGroup.style.display = 'none';
         if (deactCb) deactCb.checked = false;
@@ -2391,8 +2606,15 @@ async function executeAccountCreation(isHandoverConfirmed = false) {
     const idNumber = idEl ? idEl.value : '';
     const username = uEl ? uEl.value.trim() : '';
     const email = eEl ? eEl.value.trim() : '';
-    const password = pEl ? pEl.value : '';
+    let password = pEl ? pEl.value : '';
     const isDeact = deactEl && deactEl.checked;
+
+    // Guard: Prevent sending autofilled or default Admin@12345! password.
+    // If empty or matching known fixed credentials, generate a fresh random 8-character password.
+    if (!password || password.trim() === '' || password === 'Admin@12345!' || password === '@Abcde12345' || password === '@Password12345') {
+        password = generateRandomPassword();
+        if (pEl) pEl.value = password;
+    }
 
     let pwd = '';
     if (userRole === 'super_admin' || userRole === 'admin') {
@@ -2778,6 +3000,134 @@ function resetUserFilters() {
 }
 
 // ── Superadmin Succession & Role Transfer ──────────────────────────────────
+let allEligibleSuccessors = [];
+
+function renderSuccessorOptions(list, selectedId = null) {
+    const select = document.getElementById('succSuccessorSelect');
+    const hint = document.getElementById('succSuccessorHint');
+    const searchInput = document.getElementById('succSearchInput');
+    if (!select) return;
+
+    select.innerHTML = '';
+
+    const defaultOpt = document.createElement('option');
+    defaultOpt.value = '';
+    defaultOpt.textContent = list.length > 0 
+        ? '-- Select an eligible Active Administrator --' 
+        : '-- No matching administrators found --';
+    select.appendChild(defaultOpt);
+
+    let matchFound = false;
+    list.forEach(admin => {
+        const opt = document.createElement('option');
+        opt.value = admin.id;
+        const name = ((admin.first_name || '') + ' ' + (admin.last_name || '')).trim() || admin.username;
+        const identifier = admin.email || admin.id_number || 'Administrator';
+        opt.textContent = `${name} (@${admin.username}) - ${identifier}`;
+        opt.dataset.username = admin.username;
+        opt.dataset.name = name;
+        opt.dataset.idNumber = admin.id_number || '';
+        opt.dataset.email = admin.email || '';
+
+        if (selectedId && String(admin.id) === String(selectedId)) {
+            opt.selected = true;
+            matchFound = true;
+        }
+        select.appendChild(opt);
+    });
+
+    select.disabled = (list.length === 0);
+
+    const query = (searchInput ? searchInput.value.trim() : '');
+    if (query) {
+        if (list.length > 0) {
+            if (hint && !select.value) {
+                hint.innerHTML = `Showing <strong>${list.length}</strong> of <strong>${allEligibleSuccessors.length}</strong> administrators matching <em>"${escapeHtml(query)}"</em>.`;
+            }
+        } else {
+            if (hint) {
+                hint.innerHTML = `<span style="color:var(--danger)">⚠️ No administrators match "${escapeHtml(query)}". <a href="javascript:void(0)" onclick="clearSuccessorSearch()" style="color:var(--accent,#6366f1);text-decoration:underline;">Clear filter</a></span>`;
+            }
+        }
+    } else {
+        if (hint && !select.value) {
+            hint.textContent = `${allEligibleSuccessors.length} eligible Active Administrator(s) available for succession.`;
+        }
+    }
+
+    onSuccessorSelected();
+}
+
+function filterSuccessorOptions() {
+    const searchInput = document.getElementById('succSearchInput');
+    const clearBtn = document.getElementById('succSearchClear');
+    const select = document.getElementById('succSuccessorSelect');
+    if (!searchInput || !select) return;
+
+    const query = searchInput.value.trim().toLowerCase();
+    if (clearBtn) {
+        clearBtn.style.display = query ? 'block' : 'none';
+    }
+
+    const currentSelectedId = select.value;
+
+    if (!query) {
+        renderSuccessorOptions(allEligibleSuccessors, currentSelectedId);
+        return;
+    }
+
+    const filtered = allEligibleSuccessors.filter(admin => {
+        const username = (admin.username || '').toLowerCase();
+        const firstName = (admin.first_name || '').toLowerCase();
+        const lastName = (admin.last_name || '').toLowerCase();
+        const fullName = `${firstName} ${lastName}`.trim().toLowerCase();
+        const email = (admin.email || '').toLowerCase();
+        const idNumber = (admin.id_number || '').toLowerCase();
+
+        return username.includes(query) ||
+               firstName.includes(query) ||
+               lastName.includes(query) ||
+               fullName.includes(query) ||
+               email.includes(query) ||
+               idNumber.includes(query);
+    });
+
+    let targetSelectId = currentSelectedId;
+    if (filtered.length === 1 && (!targetSelectId || !filtered.some(a => String(a.id) === String(targetSelectId)))) {
+        targetSelectId = filtered[0].id;
+    }
+
+    renderSuccessorOptions(filtered, targetSelectId);
+}
+
+function clearSuccessorSearch() {
+    const searchInput = document.getElementById('succSearchInput');
+    const clearBtn = document.getElementById('succSearchClear');
+    const select = document.getElementById('succSuccessorSelect');
+    if (searchInput) {
+        searchInput.value = '';
+        searchInput.focus();
+    }
+    if (clearBtn) clearBtn.style.display = 'none';
+    const currentSelectedId = select ? select.value : null;
+    renderSuccessorOptions(allEligibleSuccessors, currentSelectedId);
+}
+
+function handleSuccessorSearchKey(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        const select = document.getElementById('succSuccessorSelect');
+        if (select && select.options.length > 1) {
+            if (!select.value && select.options[1]) {
+                select.selectedIndex = 1;
+                onSuccessorSelected();
+            }
+        }
+    } else if (e.key === 'Escape') {
+        clearSuccessorSearch();
+    }
+}
+
 async function openSuperadminSuccessionModal(preselectedId = null) {
     const modal = document.getElementById('superadminTransferModal');
     if (!modal) return;
@@ -2788,6 +3138,8 @@ async function openSuperadminSuccessionModal(preselectedId = null) {
     const form = document.getElementById('superadminTransferForm');
     const submitBtn = document.getElementById('succSubmitBtn');
     const btnText = document.getElementById('succSubmitBtnText');
+    const searchInput = document.getElementById('succSearchInput');
+    const clearBtn = document.getElementById('succSearchClear');
 
     if (alertBox) { alertBox.style.display = 'none'; alertBox.textContent = ''; }
     if (form) form.reset();
@@ -2795,6 +3147,12 @@ async function openSuperadminSuccessionModal(preselectedId = null) {
     if (checkbox) checkbox.checked = false;
     if (submitBtn) submitBtn.disabled = true;
     if (btnText) btnText.textContent = 'Execute Succession & Step Down';
+
+    if (searchInput) {
+        searchInput.value = '';
+        searchInput.disabled = true;
+    }
+    if (clearBtn) clearBtn.style.display = 'none';
 
     select.innerHTML = '<option value="">Loading eligible administrators...</option>';
     select.disabled = true;
@@ -2807,6 +3165,7 @@ async function openSuperadminSuccessionModal(preselectedId = null) {
             const errMsg = (res && res.message) ? res.message : 'Failed to retrieve eligible administrators.';
             select.innerHTML = '<option value="">Error loading eligible administrators</option>';
             select.disabled = true;
+            if (searchInput) searchInput.disabled = true;
             if (hint) hint.innerHTML = `<span style="color:var(--danger)">⚠️ ${escapeHtml(errMsg)}</span>`;
             if (alertBox) {
                 alertBox.className = 'modal-alert-banner alert-error';
@@ -2816,42 +3175,28 @@ async function openSuperadminSuccessionModal(preselectedId = null) {
             return;
         }
 
-        select.innerHTML = '<option value="">-- Select an eligible Active Administrator --</option>';
-        
-        let successors = [];
+        allEligibleSuccessors = [];
         if (res.data) {
             if (Array.isArray(res.data.successors)) {
-                successors = res.data.successors;
+                allEligibleSuccessors = res.data.successors;
             } else if (Array.isArray(res.data)) {
-                successors = res.data;
+                allEligibleSuccessors = res.data;
             }
         }
 
-        if (successors.length > 0) {
-            successors.forEach(admin => {
-                const opt = document.createElement('option');
-                opt.value = admin.id;
-                const name = ((admin.first_name || '') + ' ' + (admin.last_name || '')).trim() || admin.username;
-                const identifier = admin.email || admin.id_number || 'Administrator';
-                opt.textContent = `${name} (@${admin.username}) - ${identifier}`;
-                opt.dataset.username = admin.username;
-                opt.dataset.name = name;
-                if (preselectedId && String(admin.id) === String(preselectedId)) {
-                    opt.selected = true;
-                }
-                select.appendChild(opt);
-            });
-            select.disabled = false;
-            if (hint) hint.textContent = `${successors.length} eligible Active Administrator(s) available for succession.`;
-            onSuccessorSelected();
+        if (allEligibleSuccessors.length > 0) {
+            if (searchInput) searchInput.disabled = false;
+            renderSuccessorOptions(allEligibleSuccessors, preselectedId);
         } else {
             select.innerHTML = '<option value="">No eligible Active Administrators found</option>';
             select.disabled = true;
+            if (searchInput) searchInput.disabled = true;
             if (hint) hint.innerHTML = '<span style="color:var(--danger)">⚠️ No eligible Active Administrators found. You must promote or approve an active Administrator before stepping down.</span>';
         }
     } catch (err) {
         console.error('Error fetching eligible successors:', err);
         select.innerHTML = '<option value="">Error loading eligible administrators</option>';
+        if (searchInput) searchInput.disabled = true;
         if (hint) hint.textContent = 'Network error fetching eligible administrators.';
         if (alertBox) {
             alertBox.className = 'modal-alert-banner alert-error';
@@ -2869,10 +3214,29 @@ function closeSuperadminSuccessionModal() {
 function onSuccessorSelected() {
     const select = document.getElementById('succSuccessorSelect');
     const hint = document.getElementById('succSuccessorHint');
+    const searchInput = document.getElementById('succSearchInput');
     if (!select || !hint) return;
     const selectedOpt = select.options[select.selectedIndex];
     if (selectedOpt && selectedOpt.value) {
-        hint.innerHTML = `Selected Successor: <strong>${escapeHtml(selectedOpt.dataset.name || selectedOpt.text)}</strong>. Master Superadmin privileges will be permanently transferred to this account.`;
+        const query = searchInput ? searchInput.value.trim() : '';
+        const baseHint = `Selected Successor: <strong>${escapeHtml(selectedOpt.dataset.name || selectedOpt.text)}</strong>. Master Superadmin privileges will be permanently transferred to this account.`;
+        if (query) {
+            hint.innerHTML = `${baseHint} <span style="display:block;margin-top:4px;font-size:0.78rem;opacity:0.85;">(Filtered by "${escapeHtml(query)}")</span>`;
+        } else {
+            hint.innerHTML = baseHint;
+        }
+    } else {
+        const query = searchInput ? searchInput.value.trim() : '';
+        if (query) {
+            const matchesCount = select.options.length > 1 ? select.options.length - 1 : 0;
+            if (matchesCount > 0) {
+                hint.innerHTML = `Showing <strong>${matchesCount}</strong> of <strong>${allEligibleSuccessors.length}</strong> administrators matching <em>"${escapeHtml(query)}"</em>.`;
+            } else {
+                hint.innerHTML = `<span style="color:var(--danger)">⚠️ No administrators match "${escapeHtml(query)}". <a href="javascript:void(0)" onclick="clearSuccessorSearch()" style="color:var(--accent,#6366f1);text-decoration:underline;">Clear filter</a></span>`;
+            }
+        } else if (allEligibleSuccessors.length > 0) {
+            hint.textContent = `${allEligibleSuccessors.length} eligible Active Administrator(s) available for succession.`;
+        }
     }
 }
 
@@ -3359,9 +3723,20 @@ function confirmLogout() {
 // Global key handler for modal dismissal
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
+        const delReasonModal = document.getElementById('viewDeletionReasonModal');
+        if (delReasonModal && delReasonModal.style.display === 'flex') {
+            closeViewDeletionReasonModal();
+            return;
+        }
+        const promptModal = document.getElementById('customPromptModal');
+        if (promptModal && promptModal.style.display === 'flex') {
+            resolveCustomPrompt(null);
+            return;
+        }
         const logoutModal = document.getElementById('logoutConfirmModal');
         if (logoutModal && logoutModal.style.display === 'flex') {
             closeLogoutConfirmModal();
+            return;
         }
     }
 });
@@ -3393,3 +3768,15 @@ window.toggleCaPasswordVisibility = toggleCaPasswordVisibility;
 window.setCaPrivPreset = setCaPrivPreset;
 window.goToCreateAccountStep = goToCreateAccountStep;
 window.onSuccConfirmCheckboxChange = onSuccConfirmCheckboxChange;
+window.filterSuccessorOptions = filterSuccessorOptions;
+window.clearSuccessorSearch = clearSuccessorSearch;
+window.handleSuccessorSearchKey = handleSuccessorSearchKey;
+window.customPrompt = customPrompt;
+window.submitCustomPrompt = submitCustomPrompt;
+window.resolveCustomPrompt = resolveCustomPrompt;
+window.deleteUser = deleteUser;
+window.loadDeleteRequests = loadDeleteRequests;
+window.handleDeleteReq = handleDeleteReq;
+window.openViewDeletionReasonModal = openViewDeletionReasonModal;
+window.closeViewDeletionReasonModal = closeViewDeletionReasonModal;
+

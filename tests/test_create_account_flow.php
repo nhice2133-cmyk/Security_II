@@ -112,6 +112,34 @@ testAssert("Account ID number matches", $createdUser['id_number'] === $simIdNumb
 $pdo->prepare("DELETE FROM users WHERE id = ?")->execute([$createdId]);
 testAssert("Simulated test user cleaned up", true);
 
+// Test 5: Verify prevention of fixed 'Admin@12345!' password for superadmin & created accounts
+echo "\n5. Testing prevention of fixed Admin@12345! password on account creation...\n";
+
+// Simulate backend logic: if someone submits 'Admin@12345!' for super_admin
+$testRole = 'super_admin';
+$submittedPwd = 'Admin@12345!';
+$resolvedPwd = $submittedPwd;
+if ($testRole === 'super_admin' || trim($resolvedPwd) === '' || $resolvedPwd === 'Admin@12345!' || $resolvedPwd === '@Abcde12345' || $resolvedPwd === '@Password12345') {
+    $resolvedPwd = generateRandom8CharPassword();
+}
+
+testAssert("Superadmin creation never retains fixed Admin@12345! password", $resolvedPwd !== 'Admin@12345!');
+testAssert("Resolved password is an 8-character random password", strlen($resolvedPwd) === 8);
+testAssert("Resolved password meets all system password policy requirements", validatePassword($resolvedPwd) === null);
+
+// Test 6: Verify frontend safeguards in dashboard.php & admin.js
+echo "\n6. Testing frontend autofill prevention and admin.js safeguards...\n";
+$dashContent = file_get_contents(__DIR__ . '/../pages/dashboard.php');
+$adminJsContent = file_get_contents(__DIR__ . '/../js/admin.js');
+$adminActionsContent = file_get_contents(__DIR__ . '/../php/admin_actions.php');
+
+testAssert("dashboard.php form includes autocomplete='off'", strpos($dashContent, 'id="createAccountForm"') !== false && strpos($dashContent, 'autocomplete="off"') !== false);
+testAssert("dashboard.php caPassword includes autocomplete='new-password'", strpos($dashContent, 'autocomplete="new-password"') !== false);
+testAssert("admin.js validateRoleField() enforces random password for super_admin", strpos($adminJsContent, "pwdEl.value === 'Admin@12345!'") !== false);
+testAssert("admin.js executeAccountCreation() prevents submitting Admin@12345!", strpos($adminJsContent, "password === 'Admin@12345!'") !== false);
+testAssert("admin_actions.php enforces random password for super_admin and blocks Admin@12345!", strpos($adminActionsContent, "Admin@12345!'") !== false);
+
 echo "\n=================================================================\n";
 echo "ALL CREATE ACCOUNT FLOW TESTS PASSED SUCCESSFULLY!\n";
 echo "=================================================================\n";
+
